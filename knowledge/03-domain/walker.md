@@ -46,6 +46,30 @@ reachable is covered.
 
 `findNextBuildNodeFrom(...)` is the localized variant used after drill-pauses-for-build.
 
+### Auto-expansion (Phase 9c)
+
+With `repertoires.auto_expand` on, a build walk that lands on an **opponent-turn**
+attention node fills it in silently and keeps walking, so the user is only stopped for
+decisions that are theirs: their own move. This is sound because opponent moves carry no
+SRS card — widening the frontier costs nothing at drill time. `newCardsPerDay` remains the
+only throttle on cards ([srs-drilling](srs-drilling.md#daily-diet)); do not add a second.
+
+Three rules, all guarding silent failures
+([autoExpand.ts](../../apps/web/src/lib/walker/autoExpand.ts) + tests):
+
+1. **A dropped branch is never re-added.** An attention node is one with no *live*
+   children, so a position whose replies were all dropped looks identical to an untouched
+   one. Without the filter, auto-expansion would re-add exactly what the user rejected,
+   every session. The caller must pass **all** moves at the parent, dropped included.
+2. **Only explorer-sourced candidates authorize a write** — the book's ordering is
+   alphabetical, not popular ([explorer](explorer.md#consuming-it-phase-9c)).
+3. **Capped** at 3 replies per position, and `AUTO_EXPAND_MAX_STEPS` bounds the
+   expand-then-re-walk loop so a pathological tree can't spin instead of prompting.
+
+When nothing can be added — cold explorer, everything known, everything dropped — the
+walker falls through to the normal prompt rather than stalling. Off by default, per
+repertoire, toggled in the walker header during a build session.
+
 ### Scoped building
 
 With a [line scope](srs-drilling.md#line-scopes-phase-9a) the build seed keeps building

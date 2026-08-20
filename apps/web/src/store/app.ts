@@ -43,6 +43,8 @@ interface AppStore {
     tags?: string[];
   }): Promise<string>;
   renameRepertoire(id: string, name: string): Promise<void>;
+  /** Phase 9c: opt this repertoire in/out of silent opponent auto-expansion. */
+  setAutoExpand(id: string, autoExpand: boolean): Promise<void>;
   deleteRepertoire(id: string): Promise<void>;
   /** Load a repertoire into `active` WITHOUT changing the view (router/deep links). */
   loadRepertoire(id: string): Promise<void>;
@@ -105,6 +107,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const created = await api.importPgn(input);
     await get().loadList();
     return created.id;
+  },
+
+  async setAutoExpand(id, autoExpand) {
+    await api.patchRepertoire(id, { autoExpand });
+    await get().loadList();
+    if (get().active?.id === id) await get().reloadActive();
   },
 
   async renameRepertoire(id, name) {

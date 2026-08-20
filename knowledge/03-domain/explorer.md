@@ -1,10 +1,7 @@
 # Opening explorer (Phase 9b)
 
-**Status: the data layer is built; nothing in the UI consumes it yet.** The table, the
-fetch/cache service, the endpoint, the API-client method, and the selection policy all
-exist and are tested. Wiring them into the walker's build prompt is Phase 9c
-([repertoire-growth](repertoire-growth.md)) and has not been done — do not assume a build
-prompt shows candidates today.
+**Status: built and wired.** The table, fetch/cache service, endpoint, selection policy
+(9b) and the walker's candidate UI + auto-expansion (9c) all exist and are tested.
 
 Related: [opening-database](opening-database.md) (the ECO book, a *different* source with
 a different job) · [engine](engine.md) · [srs-drilling](srs-drilling.md) ·
@@ -80,6 +77,25 @@ terms rather than converted to centipawns.
 
 `moveScore()` returns `null` below 10 games instead of a number: a 100% score over three
 games is noise, and rendering it beside a real figure invites the user to trust it.
+
+## Consuming it (Phase 9c)
+
+[lib/openings/candidates.ts](../../apps/web/src/lib/openings/candidates.ts) composes the
+sources and is where UCI becomes SAN (chess.js only, at that one boundary). Engine lines
+are matched against the board's FEN before use, so a late result for the *previous* node
+can never be offered as prep here.
+
+**The book fallback may be shown, never written from.** `getOpponentCandidates` falls back
+to book continuations when the explorer is cold — but the book is ordered
+named-then-alphabetical, not by popularity, so its top three after 1.e4 are `a5, a6, b6`.
+Displaying that is honest (the panel labels it); silently prepping it is not, which is why
+`selectAutoExpandSans` refuses any source but `'explorer'`. See
+[walker](walker.md#auto-expansion-phase-9c).
+
+The [frontier prefetcher](../../apps/web/src/lib/openings/prefetch.ts) warms entries for
+uncovered positions during idle time. It is purely an optimization: one request at a time,
+capped per call, no retries — a failed warm just means the next prompt pays latency it
+would have paid anyway.
 
 ## Local gotcha
 

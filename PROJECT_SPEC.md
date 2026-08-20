@@ -365,7 +365,7 @@ Still open (deliberately deferred): merging the three drill implementations
 multi-repertoire walker — see Phase 8a note; classic drill remains reachable
 via the card overflow menu until then.
 
-### Phase 9 — Repertoire growth & line scopes 🚧 in progress (9a, 9b ✅ done)
+### Phase 9 — Repertoire growth & line scopes 🚧 in progress (9a, 9b, 9c ✅ done)
 
 Two asks that are one feature: an opening should hold all its branches yet be
 drillable one line at a time, and building should happen *inside* drilling
@@ -408,7 +408,10 @@ UI in drill setup + the editor · **9b** explorer cache +
 ranking ✅ **done** — `explorer_entries` (migration `0006`), a read-through lichess
 client that never throws and backs off on 429, `GET /explorer/:fenKey`, and the pure
 selection policy in `packages/shared`; **data layer only, no UI consumes it yet** ·
-**9c** auto-expand + candidate UI + frontier prefetcher · **9d** mistake rehearsal.
+**9c** auto-expand + candidate UI + frontier prefetcher ✅ **done** — opt-in
+`repertoires.auto_expand` (migration `0007`); auto-expansion never re-adds a dropped
+branch and refuses to write from book-ordered candidates (only real frequencies
+authorize a silent write) · **9d** mistake rehearsal.
 
 The 9b fetch/aggregate/frequency-per-fenKey plumbing is the same as Phase 10
 needs, which is why growth now comes before scouting.

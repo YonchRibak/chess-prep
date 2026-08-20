@@ -23,6 +23,7 @@ function emptyRep(color: 'white' | 'black' = 'white'): RepertoireFull {
     color,
     tags: [],
     drillRules: {},
+    autoExpand: false,
     rootFenKey: ROOT_KEY,
     rootFullFen: ROOT_FEN,
     createdAt: '',

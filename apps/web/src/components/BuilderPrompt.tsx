@@ -16,13 +16,67 @@
  * it never creates a card.
  */
 import { useEffect, useState } from 'react';
+import type { RankedReply, UserCandidate } from '@chess-prep/shared';
 import { Card, Btn } from './ui';
 import { useBookContinuations } from '../lib/openings/useBookContinuations';
 import type { BookContinuation } from '../api/client';
+import type { CandidateSource } from '../lib/openings/candidates';
 
 interface MoveLite {
   san: string;
   childFenKey: string;
+}
+
+/**
+ * Phase 9c stats strip: share of games, and the score for whoever is to move.
+ * Book-sourced rows carry no counts, so they render nothing rather than a `0%`
+ * that reads as "nobody plays this".
+ */
+function StatsBadge({ games, share, score }: { games: number; share: number; score: number | null }) {
+  if (games <= 0) return null;
+  return (
+    <span className="ml-auto flex items-baseline gap-2 tabular-nums text-[10px] text-slate-400">
+      <span title={`${games.toLocaleString()} games`}>{(share * 100).toFixed(0)}%</span>
+      {score !== null && (
+        <span
+          title="Score for the side to move (draw = ½)"
+          className={score >= 0.55 ? 'text-emerald-400' : score <= 0.45 ? 'text-rose-400' : ''}
+        >
+          {(score * 100).toFixed(0)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Engine eval, from the side-to-move's perspective. */
+function EvalBadge({ cp, mate }: { cp?: number; mate?: number }) {
+  if (mate !== undefined) {
+    return (
+      <span className="text-[10px] font-mono text-amber-300">
+        #{mate > 0 ? mate : `-${Math.abs(mate)}`}
+      </span>
+    );
+  }
+  if (cp === undefined) return null;
+  const pawns = cp / 100;
+  return (
+    <span className="text-[10px] font-mono text-slate-300">
+      {pawns >= 0 ? '+' : ''}
+      {pawns.toFixed(2)}
+    </span>
+  );
+}
+
+function SourceNote({ source }: { source: CandidateSource }) {
+  if (source === 'explorer') return null; // the numbers speak for themselves
+  return (
+    <p className="mt-2 text-[10px] text-slate-500">
+      {source === 'book'
+        ? 'Frequencies unavailable — showing book continuations in book order.'
+        : 'No suggestions available offline. Play any legal move on the board.'}
+    </p>
+  );
 }
 
 interface UserTurnProps {
@@ -31,6 +85,16 @@ interface UserTurnProps {
   /** Moves already saved from the current position (at most one in v1). */
   existingPrep: MoveLite[];
   onPickPrep: (san: string) => void | Promise<void>;
+  /**
+   * Phase 9c: engine candidates, re-ranked by explorer popularity. Supplied by
+   * the caller because the engine lives there and is only ungated during build
+   * phases ([engine](../../../../knowledge/03-domain/engine.md)) — this panel
+   * must never be able to start analysis of its own.
+   *
+   * Omitted (or empty) falls back to the plain book list, which is what happens
+   * offline, before the first depth arrives, and in the editor.
+   */
+  engineCandidates?: UserCandidate[];
 }
 
 interface OpponentTurnProps {
@@ -51,6 +115,13 @@ interface OpponentTurnProps {
    * walker never asks about it again.
    */
   onDropResponse?: (san: string) => void | Promise<void>;
+  /**
+   * Phase 9c: explorer-ranked replies for this position. When present they
+   * replace the book list — they answer "which replies actually happen", which
+   * the book cannot. Falls back to the book automatically when absent.
+   */
+  explorerReplies?: RankedReply[];
+  candidateSource?: CandidateSource;
 }
 
 export function BuilderPrompt(props: UserTurnProps | OpponentTurnProps) {
@@ -64,10 +135,12 @@ export function BuilderPrompt(props: UserTurnProps | OpponentTurnProps) {
 function UserTurnPanel({
   existingPrep,
   onPickPrep,
+  engineCandidates,
   continuations,
   loading,
 }: UserTurnProps & { continuations: BookContinuation[]; loading: boolean }) {
   const prepped = existingPrep[0] ?? null;
+  const ranked = engineCandidates ?? [];
   return (
     <Card title="What's your move here?">
       {prepped && (
@@ -76,7 +149,38 @@ function UserTurnPanel({
           <span className="text-slate-500">— pick another to swap (we'll confirm).</span>
         </div>
       )}
-      {loading && continuations.length === 0 ? (
+      {ranked.length > 0 ? (
+        <>
+          <ul className="flex flex-col gap-1">
+            {ranked.map((c) => (
+              <li key={c.san}>
+                <button
+                  type="button"
+                  onClick={() => void onPickPrep(c.san)}
+                  className={`w-full flex items-baseline gap-2 text-left px-2 py-1.5 rounded text-xs hover:bg-slate-800 ${
+                    prepped?.san === c.san ? 'bg-slate-800 text-emerald-300' : ''
+                  }`}
+                >
+                  <span className="font-mono font-semibold">{c.san}</span>
+                  <EvalBadge cp={c.cp} mate={c.mate} />
+                  {c.engineRank > 1 && (
+                    <span className="text-[10px] text-slate-500">engine #{c.engineRank}</span>
+                  )}
+                  <StatsBadge
+                    games={c.games ?? 0}
+                    share={c.share ?? 0}
+                    score={c.score}
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-slate-500">
+            Engine picks the shortlist; how often a move is played only breaks ties between
+            moves it rates equally. Or play any legal move on the board.
+          </p>
+        </>
+      ) : loading && continuations.length === 0 ? (
         <p className="text-xs text-slate-500">Loading book suggestions…</p>
       ) : continuations.length === 0 ? (
         <p className="text-xs text-slate-500">
@@ -106,9 +210,11 @@ function UserTurnPanel({
           ))}
         </ul>
       )}
-      <p className="mt-2 text-[10px] text-slate-500">
-        Or play any legal move on the board to set your prep.
-      </p>
+      {ranked.length === 0 && (
+        <p className="mt-2 text-[10px] text-slate-500">
+          Or play any legal move on the board to set your prep.
+        </p>
+      )}
     </Card>
   );
 }
@@ -118,10 +224,24 @@ function OpponentTurnPanel({
   onSaveSelected,
   onPickSingle,
   onDropResponse,
+  explorerReplies,
+  candidateSource,
   continuations,
   loading,
 }: OpponentTurnProps & { continuations: BookContinuation[]; loading: boolean }) {
   const preppedSans = new Set(existingPrep.map((m) => m.san));
+  // Explorer rows answer "which replies actually happen"; book rows only say
+  // "this has a name". Prefer the former, keep the latter as the offline path.
+  const openingBySan = new Map(continuations.map((c) => [c.san, c.opening]));
+  const rows: Array<{ san: string; games: number; share: number; score: number | null }> =
+    (explorerReplies ?? []).length > 0
+      ? explorerReplies!.map((r) => ({
+          san: r.san,
+          games: r.games,
+          share: r.share,
+          score: r.score,
+        }))
+      : continuations.map((c) => ({ san: c.san, games: 0, share: 0, score: null }));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
@@ -167,18 +287,19 @@ function OpponentTurnPanel({
           ))}
         </div>
       )}
-      {loading && continuations.length === 0 ? (
-        <p className="text-xs text-slate-500">Loading book continuations…</p>
-      ) : continuations.length === 0 ? (
+      {loading && rows.length === 0 ? (
+        <p className="text-xs text-slate-500">Loading suggestions…</p>
+      ) : rows.length === 0 ? (
         <p className="text-xs text-slate-500">
-          No book continuations from this position. Play any legal opponent move on the board
-          to add a sideline.
+          No suggestions from this position. Play any legal opponent move on the board to add
+          a sideline.
         </p>
       ) : (
         <ul className="flex flex-col gap-0.5">
-          {continuations.map((c) => {
+          {rows.map((c) => {
             const isPrepped = preppedSans.has(c.san);
             const isSelected = selected.has(c.san);
+            const opening = openingBySan.get(c.san) ?? null;
             return (
               <li
                 key={c.san}
@@ -210,12 +331,13 @@ function OpponentTurnPanel({
                   }
                 >
                   <span className="font-mono font-semibold">{c.san}</span>
-                  {c.opening && (
+                  {opening && (
                     <span className="text-slate-400">
-                      {c.opening.name}
-                      {c.opening.variation ? `, ${c.opening.variation}` : ''}
+                      {opening.name}
+                      {opening.variation ? `, ${opening.variation}` : ''}
                     </span>
                   )}
+                  <StatsBadge games={c.games} share={c.share} score={c.score} />
                 </button>
                 {isPrepped ? (
                   <span className="text-[10px] text-slate-500">prepped</span>
@@ -242,6 +364,7 @@ function OpponentTurnPanel({
           : ''}
         Playing an opponent move on the board also adds it (for off-book sidelines).
       </p>
+      <SourceNote source={candidateSource ?? 'book'} />
       {showSave && (
         <div className="mt-2 flex justify-end">
           <Btn type="button" variant="primary" disabled={submitting} onClick={() => void save()}>

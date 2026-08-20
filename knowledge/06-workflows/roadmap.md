@@ -20,6 +20,7 @@ Legend: ✅ done · ⏸ parked
 | **8a** ✅ | Daily diet — scope picker, round-robin interleave across repertoires, `new_cards_per_day` cap, `UserSettings` |
 | **8b** ✅ | Engine gating — module-level `setGated`, per-phase gating in the walker, arrows + eval in build phases |
 | **8c** ✅ | Navigation & flow polish — path-replay board loading, `MoveLine`, retrain-on-wrong-answer, working skip, inline 409 swap, daily-first home, single creation flow, hash routing |
+| **9c** ✅ | Growth loop — opt-in `repertoires.auto_expand`, silent opponent expansion (never re-adds a dropped branch, never writes from book order), engine+explorer candidates in the build prompt, idle frontier prefetcher |
 | **9b** ✅ | Explorer cache + ranking — `explorer_entries`, the lichess read-through client (never throws, backs off on 429), `GET /explorer/:fenKey`, and the pure candidate-selection policy in `packages/shared`. **Data layer only — no UI consumes it yet (that's 9c)** |
 | **9a** ✅ | Line scopes — `moves.line_tags` with inherit-on-insert, `DrillRules.scope` (`all` / `openingName` / `tag`), honored by both queue builders and the walker's build seed, offline opening-name cache, scope picker in drill setup and a tag field in the editor |
 
@@ -38,22 +39,19 @@ Legend: ✅ done · ⏸ parked
 
 ## Next up
 
-### Phase 9c–9d — Repertoire growth ⏸ designed, not built
+### Phase 9d — Mistake rehearsal ⏸ designed, not built
 
 Designed in [repertoire-growth.md](../03-domain/repertoire-growth.md) — read that before
-proposing work here. **9a (line scopes) and 9b (the explorer data layer) are shipped**;
-what remains is everything the user can actually see: the walker's build prompt still shows
-no candidates, and nothing auto-expands.
+proposing work here. **9a–9c are shipped.** What remains is the mistake side: today a miss
+grades Again and leaves no trace beyond FSRS's `lapses` counter.
 
-- **9c** — opponent auto-expand, ranked candidate UI in the build phase, frontier
-  prefetcher. Must be opt-in per repertoire and must never re-add a dropped branch.
-  The ranking functions it needs already exist and are tested
-  ([explorer](../03-domain/explorer.md)); 9c is the wiring plus a per-repertoire opt-in
-  flag, which has **no column yet**.
-- **9d** — `drill_attempts`, mistakes scope, interference detection, refutation shadow
-  lines (stored, never carded).
+A `drill_attempts` log — `(move_id, played_san, was_correct, at)` — unlocks a
+recency-weighted `mistakes` scope (composable with the shipped line scopes), transposition
+**interference detection** (the played SAN is the correct prep at a *different* position —
+nearly free from the index the walker already builds), and optional refutation shadow
+lines that are stored but never prep and never carded.
 
-No schema, module, or UI exists for any of 9b–9d.
+**No table, module, or UI exists for any of it.**
 
 ## Parked
 

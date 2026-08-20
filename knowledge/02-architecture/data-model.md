@@ -2,7 +2,7 @@
 
 Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
-`0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`.
+`0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`, `0007_auto_expand`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -14,6 +14,8 @@ trees**, not linear lines.
 
 ### `repertoires`
 `user_id`, `name`, `color` (`'white'|'black'`), `tags[]`, `drill_rules` (jsonb),
+`auto_expand` (Phase 9c, default **false** — silent opponent auto-expansion is opt-in
+because it writes moves without asking; see [walker](../03-domain/walker.md#auto-expansion-phase-9c)),
 timestamps, plus a denormalized root: `root_fen_key` / `root_full_fen` so the client
 knows where the tree starts without a query.
 

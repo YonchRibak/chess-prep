@@ -31,7 +31,7 @@ interface AppStore {
 |---|---|
 | Navigation | `go(view)` — also clears `active` when landing on `list` |
 | Loading | `loadList()`, `loadRepertoire(id)` (loads **without** changing the view — for the router / deep links), `openRepertoire(id)` (load + navigate), `reloadActive()` |
-| Repertoire CRUD | `createRepertoire({ name, color, tags?, seedSans? })`, `importPgn({ name, color, pgn, tags? })`, `renameRepertoire`, `deleteRepertoire`, `exportPgn(id)`, `patchDrillRules(id, rules)` |
+| Repertoire CRUD | `createRepertoire({ name, color, tags?, seedSans? })`, `importPgn({ name, color, pgn, tags? })`, `renameRepertoire`, `deleteRepertoire`, `exportPgn(id)`, `patchDrillRules(id, rules)`, `setAutoExpand(id, on)` |
 | Move edits | `addMove(parentFenKey, san, isMainLine?)`, `setComment`, `setAnnotation`, `setMainLine`, `setPriority`, `setLineTags`, `deleteMove` |
 
 Note the deliberate split between `loadRepertoire` and `openRepertoire` — mixing them up

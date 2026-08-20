@@ -27,9 +27,14 @@ import {
   fenTurn,
   isUserMove,
   mergeDrillRules,
+  rankUserCandidates,
+  selectOpponentReplies,
   Grade,
   type Color,
+  type ExplorerEntry,
+  type RankedReply,
   type SrsCardDto,
+  type UserCandidate,
 } from '@chess-prep/shared';
 import { useAppStore } from '../store/app.ts';
 import { useChessRules } from '../lib/chess/useChessRules.ts';
@@ -41,6 +46,14 @@ import { BuilderPrompt } from '../components/BuilderPrompt.tsx';
 import { api, ApiError, type RepertoireFull, type RepertoireMove, type RepertoirePosition } from '../api/client.ts';
 import { getAllCardsLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
+import {
+  engineLinesToCandidates,
+  fetchExplorerEntry,
+  getOpponentCandidates,
+  type CandidateSource,
+} from '../lib/openings/candidates.ts';
+import { selectAutoExpandSans } from '../lib/walker/autoExpand.ts';
+import { warmFrontier } from '../lib/openings/prefetch.ts';
 import { gradeAndQueue } from '../lib/srs/sync.ts';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
@@ -97,6 +110,12 @@ interface PendingSwap {
 const CORRECT_PAUSE_MS = 300;
 const OPPONENT_PAUSE_MS = 350;
 const WRONG_REVEAL_MS = 1200;
+/**
+ * Safety net on Phase 9c auto-expansion. Each expansion normally uncovers a
+ * user-turn node immediately, so this bound is never approached; it exists so a
+ * pathological tree can't spin the walk instead of showing a prompt.
+ */
+const AUTO_EXPAND_MAX_STEPS = 6;
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -116,9 +135,10 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
   const active = useAppStore((s) => s.active);
   const go = useAppStore((s) => s.go);
   const reloadActive = useAppStore((s) => s.reloadActive);
+  const setAutoExpand = useAppStore((s) => s.setAutoExpand);
 
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
-  const [stats, setStats] = useState({ correct: 0, wrong: 0, savedMoves: 0 });
+  const [stats, setStats] = useState({ correct: 0, wrong: 0, savedMoves: 0, autoAdded: 0 });
   const [drillQueue, setDrillQueue] = useState<DrillItem[] | null>(null);
   const [drillCursor, setDrillCursor] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -225,6 +245,54 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
     multipv: 3,
   });
 
+  /* ---------------- Phase 9c: candidates for the build prompt ---------------- */
+
+  // The node being built, read straight off the phase so these hooks stay
+  // above the component's early returns.
+  const buildNode =
+    phase.kind === 'attention'
+      ? phase.node
+      : phase.kind === 'drill-paused-for-build'
+        ? phase.node
+        : null;
+  const buildFenKey = buildNode?.position.fenKey ?? null;
+  const buildFullFen = buildNode?.position.fullFen ?? null;
+
+  // One explorer fetch per build node, shared by both candidate lists. Failure
+  // is silent and expected — the panel falls back to the book.
+  const [explorerEntry, setExplorerEntry] = useState<ExplorerEntry | null>(null);
+  useEffect(() => {
+    if (!buildFenKey) {
+      setExplorerEntry(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchExplorerEntry(buildFenKey).then((entry) => {
+      if (!cancelled) setExplorerEntry(entry);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [buildFenKey]);
+
+  const opponentReplies: RankedReply[] = useMemo(() => {
+    if (!buildNode || buildNode.kind !== 'opponent-picks' || !buildFullFen) return [];
+    return selectOpponentReplies(explorerEntry, fenTurn(buildFullFen));
+  }, [buildNode, buildFullFen, explorerEntry]);
+
+  const candidateSource: CandidateSource = opponentReplies.length > 0 ? 'explorer' : 'book';
+
+  const userCandidates: UserCandidate[] = useMemo(() => {
+    if (!buildNode || buildNode.kind !== 'user-prep' || !buildFullFen) return [];
+    const progress = engine.progress;
+    // Only trust analysis of the position actually on the board; a result for
+    // the previous node arriving late must never be offered as prep here.
+    if (!progress || progress.fen !== buildFullFen) return [];
+    const lines = engineLinesToCandidates(buildFullFen, progress.lines);
+    if (lines.length === 0) return [];
+    return rankUserCandidates(lines, explorerEntry, fenTurn(buildFullFen));
+  }, [buildNode, buildFullFen, engine.progress, explorerEntry]);
+
   const engineShapes = useMemo(
     () => (engineOn ? engineArrows(engine.progress, { max: 3 }) : []),
     [engineOn, engine.progress],
@@ -242,7 +310,7 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
     if (!active || !indices) return;
     let cancelled = false;
     setPhase({ kind: 'loading' });
-    setStats({ correct: 0, wrong: 0, savedMoves: 0 });
+    setStats({ correct: 0, wrong: 0, savedMoves: 0, autoAdded: 0 });
     sessionSkippedRef.current = new Set();
     setPendingSwap(null);
 
@@ -350,24 +418,107 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
    */
   async function resumeBuild(fromFenKey?: string) {
     await reloadActive();
-    const next = useAppStore.getState().active;
+    let next = useAppStore.getState().active;
     if (!next) return;
-    const idx = buildIndices(next);
-    const exclude = sessionSkippedRef.current;
-    const scopeOptions = scopeOptionsRef.current;
-    let node = findNextBuildNode(next, idx, { fromFenKey, exclude, ...scopeOptions });
-    if (!node && fromFenKey) {
-      node = findNextBuildNode(next, idx, { exclude, ...scopeOptions });
-    }
-    if (!node) {
-      setPhase({ kind: 'complete', reason: 'no-more-attention' });
+
+    // Phase 9c: opponent-turn nodes may be filled in silently when the
+    // repertoire opts in, so the walk keeps moving until it reaches a decision
+    // only the user can make (their own move). The step cap is a safety net,
+    // not a policy — each expansion normally leads straight to a user-turn
+    // node, so the loop runs once or twice.
+    for (let step = 0; step < AUTO_EXPAND_MAX_STEPS; step++) {
+      const idx = buildIndices(next);
+      const exclude = sessionSkippedRef.current;
+      const scopeOptions = scopeOptionsRef.current;
+      let node = findNextBuildNode(next, idx, { fromFenKey, exclude, ...scopeOptions });
+      if (!node && fromFenKey) {
+        node = findNextBuildNode(next, idx, { exclude, ...scopeOptions });
+      }
+      if (!node) {
+        setPhase({ kind: 'complete', reason: 'no-more-attention' });
+        return;
+      }
+
+      if (next.autoExpand && node.kind === 'opponent-picks') {
+        const added = await autoExpandAt(next, idx, node);
+        if (added > 0) {
+          await reloadActive();
+          const refreshed = useAppStore.getState().active;
+          if (!refreshed) return;
+          next = refreshed;
+          continue; // the new branch is the next thing to walk into
+        }
+        // Nothing to add (cold explorer, everything known, or everything the
+        // user dropped) — fall through and ask, rather than stalling.
+      }
+
+      loadToPosition(next, idx, node.position);
+      setPhase({ kind: 'attention', node });
+      warmFrontier(frontierKeys(next, idx));
       return;
     }
-    loadToPosition(next, idx, node.position);
-    setPhase({ kind: 'attention', node });
+  }
+
+  /**
+   * Silently add the top opponent replies at `node`.
+   *
+   * The candidate list falls back to the book when the explorer is cold, and
+   * `selectAutoExpandSans` is what guarantees a **dropped branch is never
+   * re-added** — an attention node is one with no *live* children, so a
+   * position whose replies were all dropped is indistinguishable from a fresh
+   * one here.
+   */
+  async function autoExpandAt(
+    rep: RepertoireFull,
+    idx: WalkerIndices,
+    node: WalkerNode,
+  ): Promise<number> {
+    const fenKey = node.position.fenKey;
+    // No book fetch here: the book fallback can never authorize a silent write
+    // (see selectAutoExpandSans), so asking for it would be a wasted request.
+    const { replies, source } = await getOpponentCandidates(
+      fenKey,
+      fenTurn(node.position.fullFen),
+      [],
+    );
+    // Pass ALL moves at this parent, dropped included — that is the filter.
+    // `source` blocks the write when the list is the book's alphabetical order
+    // rather than real frequencies.
+    const existing = idx.movesByParent.get(node.position.id) ?? [];
+    const decision = selectAutoExpandSans(replies, existing, { source });
+    if (decision.sans.length === 0) return 0;
+
+    let added = 0;
+    for (const san of decision.sans) {
+      try {
+        await api.addMove(rep.id, { parentFenKey: fenKey, san });
+        added++;
+      } catch (e) {
+        // One bad candidate must not abort the walk; the user can still add
+        // responses by hand at this position.
+        console.warn('[auto-expand] could not add', san, e);
+      }
+    }
+    if (added > 0) setStats((s) => ({ ...s, autoAdded: s.autoAdded + added }));
+    return added;
   }
 
   /* ---------------- build path: save actions ---------------- */
+
+  /**
+   * Positions one ply past current coverage — the walker's near future, and so
+   * what the prefetcher should warm. Cheap to compute (one pass over the live
+   * moves) and deliberately unfiltered by scope: the user may switch scope
+   * mid-session, and a warm entry is never wrong, only unused.
+   */
+  function frontierKeys(rep: RepertoireFull, idx: WalkerIndices): string[] {
+    const out: string[] = [];
+    for (const p of rep.positions) {
+      const live = (idx.movesByParent.get(p.id) ?? []).filter((m) => !m.isDropped);
+      if (live.length === 0) out.push(p.fenKey);
+    }
+    return out;
+  }
 
   async function afterPrepSaved(resume: 'build' | 'drill-paused', parentFenKey: string) {
     if (resume === 'build') {
@@ -687,6 +838,20 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
               {coverage.droppedMoves > 0 ? ` · ${coverage.droppedMoves} dropped` : ''}
             </span>
           )}
+          {seed === 'build' && (
+            <label
+              className="flex items-center gap-1.5 text-[10px] text-slate-400"
+              title="Silently add the most-played opponent replies while building. Never re-adds a branch you dropped."
+            >
+              <input
+                type="checkbox"
+                checked={active.autoExpand}
+                onChange={(e) => void setAutoExpand(active.id, e.target.checked)}
+                className="accent-emerald-500"
+              />
+              auto-expand replies
+            </label>
+          )}
           <Btn onClick={() => go({ kind: 'editor', repertoireId: active.id })}>
             Open editor
           </Btn>
@@ -771,6 +936,9 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
                   dropOpponentResponse(phase.node.position.fenKey, san)
                 }
                 onSkip={() => void skipCurrentNode()}
+                userCandidates={userCandidates}
+                explorerReplies={opponentReplies}
+                candidateSource={candidateSource}
               />
             )}
 
@@ -784,6 +952,7 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
                   mode="user-turn"
                   currentFenKey={phase.node.position.fenKey}
                   existingPrep={[]}
+                  engineCandidates={userCandidates}
                   onPickPrep={(san) =>
                     savePrepMove(phase.node.position.fenKey, san, { resume: 'drill-paused' })
                   }
@@ -892,6 +1061,9 @@ function AttentionPanel({
   onSaveSelected,
   onDropResponse,
   onSkip,
+  userCandidates,
+  explorerReplies,
+  candidateSource,
 }: {
   node: WalkerNode;
   existingPrep: { san: string; childFenKey: string }[];
@@ -900,6 +1072,9 @@ function AttentionPanel({
   onSaveSelected: (sans: string[]) => void | Promise<void>;
   onDropResponse: (san: string) => void | Promise<void>;
   onSkip: () => void;
+  userCandidates: UserCandidate[];
+  explorerReplies: RankedReply[];
+  candidateSource: CandidateSource;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -911,6 +1086,7 @@ function AttentionPanel({
           mode="user-turn"
           currentFenKey={node.position.fenKey}
           existingPrep={existingPrep}
+          engineCandidates={userCandidates}
           onPickPrep={onPickPrep}
         />
       ) : (
@@ -921,6 +1097,8 @@ function AttentionPanel({
           onSaveSelected={onSaveSelected}
           onPickSingle={onPickSingle}
           onDropResponse={onDropResponse}
+          explorerReplies={explorerReplies}
+          candidateSource={candidateSource}
         />
       )}
       <div className="flex gap-2">
@@ -943,7 +1121,7 @@ function SessionProgress({
   drillDone,
 }: {
   seed: WalkerSeed;
-  stats: { correct: number; wrong: number; savedMoves: number };
+  stats: { correct: number; wrong: number; savedMoves: number; autoAdded: number };
   drillTotal?: number;
   drillDone?: number;
 }) {
@@ -953,6 +1131,14 @@ function SessionProgress({
         <span className="font-mono text-slate-400">
           Saved {stats.savedMoves} move{stats.savedMoves === 1 ? '' : 's'}
         </span>
+        {stats.autoAdded > 0 && (
+          <span
+            className="text-slate-400 font-mono"
+            title="Opponent replies added automatically. They carry no flashcards."
+          >
+            +{stats.autoAdded} auto
+          </span>
+        )}
       </div>
     );
   }
@@ -966,6 +1152,14 @@ function SessionProgress({
       {stats.savedMoves > 0 && (
         <span className="text-amber-300 font-mono">+ {stats.savedMoves} built</span>
       )}
+      {stats.autoAdded > 0 && (
+        <span
+          className="text-slate-400 font-mono"
+          title="Opponent replies added automatically. They carry no flashcards."
+        >
+          +{stats.autoAdded} auto
+        </span>
+      )}
     </div>
   );
 }
@@ -976,7 +1170,7 @@ function CompletePane({
   seed,
 }: {
   reason: 'no-more-attention' | 'no-more-due';
-  stats: { correct: number; wrong: number; savedMoves: number };
+  stats: { correct: number; wrong: number; savedMoves: number; autoAdded: number };
   seed: WalkerSeed;
 }) {
   const go = useAppStore((s) => s.go);

@@ -31,8 +31,8 @@ If a doc and the code disagree, the code wins — and the doc should be fixed.
 - [SRS & drilling](03-domain/srs-drilling.md) — FSRS, queues, drill modes, daily diet.
 - [Opening database](03-domain/opening-database.md) — ECO book, import, lookup, auto-naming.
 - [Engine & gating](03-domain/engine.md) — Stockfish worker, the hard no-leak guarantee.
-- [Repertoire growth & line scopes](03-domain/repertoire-growth.md) — Phase 9. **9a (line scopes) and 9b (explorer cache + ranking) are built**; auto-growth, the candidate UI, and mistake rehearsal are still design only.
-- [Opening explorer](03-domain/explorer.md) — Phase 9b: frequency/result statistics, the cache, and the candidate-selection policy.
+- [Repertoire growth & line scopes](03-domain/repertoire-growth.md) — Phase 9. **9a–9c are built** (line scopes, explorer cache, the growth loop); only mistake rehearsal (9d) is still design.
+- [Opening explorer](03-domain/explorer.md) — frequency/result statistics, the cache, the candidate-selection policy, and how the build prompt consumes them.
 
 ### 04 — API (`apps/api`)
 - [HTTP endpoints](04-api/endpoints.md)

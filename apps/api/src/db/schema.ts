@@ -32,6 +32,11 @@ export const repertoires = pgTable('repertoires', {
   rootFullFen: text('root_full_fen').notNull(),
   tags: text('tags').array().notNull().default([]),
   drillRules: jsonb('drill_rules').notNull().default(sql`'{}'::jsonb`),
+  // Phase 9c: opt-in silent auto-expansion of opponent replies during a build
+  // walk. Off by default and per-repertoire, because it writes moves without
+  // asking — acceptable only where the user has said so. It never re-adds a
+  // dropped branch; `is_dropped` is a standing "won't cover" instruction.
+  autoExpand: boolean('auto_expand').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

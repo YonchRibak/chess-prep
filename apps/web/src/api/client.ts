@@ -14,6 +14,8 @@ export interface RepertoireSummary {
   color: Color;
   tags: string[];
   drillRules: DrillRules;
+  /** Phase 9c: silently auto-expand opponent replies while building. Off by default. */
+  autoExpand: boolean;
   rootFenKey: string;
   rootFullFen: string;
   createdAt: string;
@@ -142,7 +144,7 @@ export const api = {
 
   patchRepertoire(
     id: string,
-    input: { name?: string; tags?: string[] },
+    input: { name?: string; tags?: string[]; autoExpand?: boolean },
   ): Promise<RepertoireSummary> {
     return request(`/repertoires/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
   },

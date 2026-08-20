@@ -51,7 +51,7 @@ i.e. [line scopes](../03-domain/opening-database.md#client-hooks) — uses `name
 | [Board.tsx](../../apps/web/src/components/Board.tsx) | The board surface; composes `useBoard` |
 | [MoveLine.tsx](../../apps/web/src/components/MoveLine.tsx) | SAN move list above the board, from `rules.history` |
 | [OpeningHeader.tsx](../../apps/web/src/components/OpeningHeader.tsx) | Auto-identified opening name from `pathFens`; mounted in the browser, editor, and walker. Shows the name only when it *changes* between plies |
-| [BuilderPrompt.tsx](../../apps/web/src/components/BuilderPrompt.tsx) | The walker's build panel. A union of `UserTurnProps` ("What's your move?") and `OpponentTurnProps` ("Which responses?") — the two build states of the walker |
+| [BuilderPrompt.tsx](../../apps/web/src/components/BuilderPrompt.tsx) | The walker's build panel. A union of `UserTurnProps` ("What's your move?") and `OpponentTurnProps` ("Which responses?") — the two build states of the walker. Phase 9c: renders engine+explorer candidates when the caller supplies them, falling back to the plain book list. It never starts analysis itself — engine lines arrive as a prop, because the engine is only ungated during build phases ([engine](../03-domain/engine.md)) |
 | [EnginePanel.tsx](../../apps/web/src/components/EnginePanel.tsx) | Eval bar + MultiPV lines |
 | [RepertoireModals.tsx](../../apps/web/src/components/RepertoireModals.tsx) | `Modal`, `BlankRepertoireModal`, `ImportPgnModal` |
 | [ui.tsx](../../apps/web/src/components/ui.tsx) | Primitives: `Btn` (variants `default`/`primary`/`ghost`), `Card`, `OverflowMenu`, `ErrorBanner` |

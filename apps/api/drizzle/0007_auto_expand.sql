@@ -1,0 +1,1 @@
+ALTER TABLE "repertoires" ADD COLUMN "auto_expand" boolean DEFAULT false NOT NULL;

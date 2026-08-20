@@ -11,6 +11,7 @@ function makeRep(): RepertoireFull {
     color: 'white',
     tags: [],
     drillRules: {},
+    autoExpand: false,
     rootFenKey: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -',
     rootFullFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
     createdAt: '2026-01-01T00:00:00Z',

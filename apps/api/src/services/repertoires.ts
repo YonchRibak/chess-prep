@@ -34,6 +34,8 @@ export interface RepertoireSummary {
   color: Color;
   tags: string[];
   drillRules: DrillRules;
+  /** Phase 9c: silently auto-expand opponent replies while building. */
+  autoExpand: boolean;
   rootFenKey: string;
   rootFullFen: string;
   createdAt: string;
@@ -186,9 +188,12 @@ export async function getRepertoire(userId: string, id: string): Promise<Reperto
 export async function patchRepertoire(
   userId: string,
   id: string,
-  input: { name?: unknown; tags?: unknown },
+  input: { name?: unknown; tags?: unknown; autoExpand?: unknown },
 ): Promise<RepertoireSummary> {
-  const update: Partial<{ name: string; tags: string[]; updatedAt: Date }> = { updatedAt: new Date() };
+  const update: Partial<{ name: string; tags: string[]; autoExpand: boolean; updatedAt: Date }> = {
+    updatedAt: new Date(),
+  };
+  if (input.autoExpand !== undefined) update.autoExpand = Boolean(input.autoExpand);
   if (input.name !== undefined) update.name = ensureNonEmptyName(input.name);
   if (input.tags !== undefined) {
     if (!Array.isArray(input.tags)) throw new HttpError(400, 'tags must be an array of strings');
@@ -980,6 +985,7 @@ function toSummary(r: {
   color: string;
   tags: string[];
   drillRules: unknown;
+  autoExpand: boolean;
   rootFenKey: string;
   rootFullFen: string;
   createdAt: Date;
@@ -991,6 +997,7 @@ function toSummary(r: {
     color: r.color as Color,
     tags: r.tags,
     drillRules: (r.drillRules && typeof r.drillRules === 'object' ? r.drillRules : {}) as DrillRules,
+    autoExpand: r.autoExpand,
     rootFenKey: r.rootFenKey,
     rootFullFen: r.rootFullFen,
     createdAt: r.createdAt.toISOString(),
