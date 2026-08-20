@@ -144,7 +144,7 @@ UserSettings (              -- (added in Phase 8a)
   daily_diet_last_reset_at,
 )
 
--- Phase 9 (parked): OpponentDataset / OpponentPosition / OpponentMove
+-- Phase 10 (parked): OpponentDataset / OpponentPosition / OpponentMove
 ```
 
 ### Rules
@@ -271,7 +271,7 @@ This is what makes the walker continuous: gaps in coverage get discovered throug
 #### Important behaviors
 
 - A book move only becomes a card if the user has explicitly set it as prep. Browsing book continuations alone never creates cards.
-- For opponent-turn positions, **only the responses the user selected** are saved into the tree. The rest are not part of the repertoire and won't trigger drills. (Gaps surface again in Phase 9's opponent scouting.)
+- For opponent-turn positions, **only the responses the user selected** are saved into the tree. The rest are not part of the repertoire and won't trigger drills. (Gaps are filled by Phase 9's growth loop and surface again in Phase 10's opponent scouting.)
 - Respect the existing per-repertoire "test all branches vs main-line-only" rule when building the drill queue.
 - **Coverage status is derived, not stored.** Any opponent-turn position whose children set is empty = uncovered. No new column on `Position`; the walker computes this.
 - **One prep move per user-turn position in v1 — application-level invariant, NOT a DB constraint.** `srs_cards.uniq_user_move` is on `(user_id, move_id)` (one card per Move row); `moves.uniq_parent_san` is on `(repertoire_id, parent_position_id, san)` (no duplicate SAN from one parent, but multiple distinct SANs allowed). The walker / `appendLine` service must check before inserting a user-side Move: if one already exists from this parent, refuse the insert or apply the swap path below. Add an integration test that hits this path directly so a future refactor cannot silently allow two prep moves per position.
@@ -365,7 +365,50 @@ Still open (deliberately deferred): merging the three drill implementations
 multi-repertoire walker — see Phase 8a note; classic drill remains reachable
 via the card overflow menu until then.
 
-### Phase 9 — Opponent scouting ⏸ parked (was old Phase 5)
+### Phase 9 — Repertoire growth & line scopes ⏸ next up
+
+Two asks that are one feature: an opening should hold all its branches yet be
+drillable one line at a time, and building should happen *inside* drilling
+instead of being hand-authored line by line. They join because auto-growth is
+what makes the tree big enough to need scoping, and scoping is what makes
+auto-growth safe to enable — and because both happen on the same write: a move
+created by the growth loop is labeled at insert time.
+
+Full design, including the failure modes each rule prevents:
+**[knowledge/03-domain/repertoire-growth.md](knowledge/03-domain/repertoire-growth.md)**.
+Summary:
+
+- **Line scopes.** A line is a *predicate*, not a stored object — copying the
+  tree would let the copy drift. Two kinds: **derived** from the ECO deepest-name
+  path walk (zero authoring cost, covers "only the Advance Variation"), and
+  **explicit** `moves.line_tags` inherited from the parent edge on insert (for
+  what the book can't express — `vs-danny`, `blitz-only`). `DrillRules` gains
+  `scope: { kind: 'all' | 'openingName' | 'tag', value? }`, read through
+  `mergeDrillRules()` and honored by both queue builders and the build seed.
+- **Candidate sources, one job each.** ECO book → naming and shallow breadth
+  (bundled, no frequency, dries up ~ply 8–10). Lichess opening explorer →
+  *which opponent replies matter*, via frequency and W/D/L, cached in
+  `explorer_entries` (a cache, never a source of truth — sessions must work with
+  it cold). Stockfish → *the user's own move*, in the already-ungated walker
+  build phase. Selection logic lives in `packages/shared` with tests.
+- **The growth loop.** Opponent branches auto-expand silently (they carry no SRS
+  card, so widening the frontier is free); the user's move always prompts, but
+  with candidates pre-ranked one click away. `newCardsPerDay` stays the only
+  throttle. Opt-in per repertoire, and it must never re-add a dropped branch.
+- **Mistake rehearsal.** A `drill_attempts` log gives a recency-weighted
+  `mistakes` scope, **interference detection** (the played SAN is the correct
+  prep at a *different* position — the common transposition confusion, nearly
+  free from the existing index), and optional refutation shadow lines that are
+  stored but never prep and never carded.
+
+Sub-phases: **9a** scopes (no network, ship alone) · **9b** explorer cache +
+ranking · **9c** auto-expand + candidate UI + frontier prefetcher · **9d**
+mistake rehearsal.
+
+The 9b fetch/aggregate/frequency-per-fenKey plumbing is the same as Phase 10
+needs, which is why growth now comes before scouting.
+
+### Phase 10 — Opponent scouting ⏸ parked (was Phase 9; originally old Phase 5)
 
 Headline differentiator from Lotus, but explicitly deferred — the four features above are the new MVP. When unparked:
 
@@ -376,7 +419,7 @@ Headline differentiator from Lotus, but explicitly deferred — the four feature
 
 Notes for the future builder: Chessground's shape API takes `{ orig, dest, brush }`; define custom brushes for graded widths/colors and map frequency → brush, score → color. Stream Lichess NDJSON with `Accept: application/x-ndjson` + a descriptive User-Agent, back off on 429. Chess.com: hit the archives endpoint first, then fetch monthly URLs sequentially.
 
-### Phase 10 — Polish ⏸ parked
+### Phase 11 — Polish ⏸ parked
 Stats dashboard (retention per line, weakest openings, drill streaks, due-card forecast). Full PWA offline pass, install prompts, background sync. Optional Capacitor wrap for app stores.
 
 ---
@@ -396,6 +439,6 @@ Stats dashboard (retention per line, weakest openings, drill streaks, due-card f
 
 ## 7. Suggested milestone for "usable by the owner"
 
-End of **Phase 8** is the real MVP for the new direction — opening-grounded repertoires, a daily mixed drill, and an engine that never spoils a card. **Phase 8 is now done.** Phases 9–10 are additive and can be built while already using the tool daily.
+End of **Phase 8** is the real MVP for the new direction — opening-grounded repertoires, a daily mixed drill, and an engine that never spoils a card. **Phase 8 is now done.** Phases 9–11 are additive and can be built while already using the tool daily.
 
 The Phase-3 single-repertoire drill (already shipped) is usable today; Phases 5–8 make it materially better and resolve the "Lotus gap" around opening identity and daily-diet ergonomics.

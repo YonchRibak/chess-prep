@@ -34,9 +34,26 @@ Legend: ✅ done · ⏸ parked
 - **No auth** — single-user via `DEFAULT_USER_ID`.
 - **No component/E2E tests.**
 
+## Next up
+
+### Phase 9 — Repertoire growth & line scopes ⏸ designed, not built
+
+Designed in [repertoire-growth.md](../03-domain/repertoire-growth.md) — read that before
+proposing work here. In short: a "line" becomes a **scope** (a predicate over moves)
+rather than a stored object, derived for free from the ECO deepest-name path walk and
+supplemented by inherited `moves.line_tags`; and the walker's existing
+drill-pauses-for-build gets a *supply side* — silent auto-expansion of opponent replies
+(they carry no cards) plus engine + Lichess-explorer ranked candidates for the user's own
+move. A `drill_attempts` log adds recency-weighted mistake drilling and transposition
+interference detection.
+
+Sub-phases 9a–9d; **9a (scopes) needs no network and is worth shipping alone.**
+
+No schema, module, or UI for any of it exists yet.
+
 ## Parked
 
-### Phase 9 — Opponent scouting ⏸
+### Phase 10 — Opponent scouting ⏸
 The headline differentiator from Lotus, explicitly deferred. When unparked:
 - Fetch opponent games by username + filters from Lichess (`/api/games/user/{u}`, NDJSON)
   and Chess.com (archives endpoint, then monthly URLs sequentially).
@@ -54,7 +71,7 @@ The TypeScript types already exist in
 [packages/shared/src/types.ts](../../packages/shared/src/types.ts) — **but there are no
 tables and no code paths.**
 
-### Phase 10 — Polish ⏸
+### Phase 11 — Polish ⏸
 Stats dashboard (retention per line, weakest openings, drill streaks, due-card forecast),
 full PWA offline pass, install prompts, background sync, optional Capacitor wrap for app
 stores.

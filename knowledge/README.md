@@ -31,6 +31,7 @@ If a doc and the code disagree, the code wins — and the doc should be fixed.
 - [SRS & drilling](03-domain/srs-drilling.md) — FSRS, queues, drill modes, daily diet.
 - [Opening database](03-domain/opening-database.md) — ECO book, import, lookup, auto-naming.
 - [Engine & gating](03-domain/engine.md) — Stockfish worker, the hard no-leak guarantee.
+- [Repertoire growth & line scopes](03-domain/repertoire-growth.md) — **design only, not built**: Phase 9 auto-growth, scoped drilling, mistake rehearsal.
 
 ### 04 — API (`apps/api`)
 - [HTTP endpoints](04-api/endpoints.md)
