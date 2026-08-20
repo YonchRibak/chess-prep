@@ -1,0 +1,37 @@
+node_modules
+dist
+build
+.next
+.turbo
+.cache
+coverage
+
+# env
+.env
+.env.local
+.env.*.local
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json.example
+.idea
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# vite
+.vite
+
+# drizzle
+drizzle/meta
+drizzle/*.snapshot.json
+
+# misc
+*.tsbuildinfo
+
+# machine-local CA chain (for TLS-intercepting AV / corporate proxies)
+.corp-ca.pem

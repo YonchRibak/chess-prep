@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1782051702861,
+      "tag": "0000_dusty_anita_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782053523457,
+      "tag": "0001_motionless_nick_fury",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782077640467,
+      "tag": "0002_narrow_rogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782080000000,
+      "tag": "0003_drop_branch",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782080500000,
+      "tag": "0004_user_settings",
+      "breakpoints": true
+    }
+  ]
+}

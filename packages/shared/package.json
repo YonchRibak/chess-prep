@@ -1,0 +1,31 @@
+{
+  "name": "@chess-prep/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth": "./src/auth.ts",
+    "./drill": "./src/drill.ts",
+    "./fen": "./src/fen.ts",
+    "./openings": "./src/openings.ts",
+    "./types": "./src/types.ts",
+    "./pgn": "./src/pgn.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo \"(shared) no lint configured yet\""
+  },
+  "dependencies": {
+    "@mliebelt/pgn-parser": "^1.4.16",
+    "chess.js": "^1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
