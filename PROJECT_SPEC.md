@@ -365,7 +365,7 @@ Still open (deliberately deferred): merging the three drill implementations
 multi-repertoire walker — see Phase 8a note; classic drill remains reachable
 via the card overflow menu until then.
 
-### Phase 9 — Repertoire growth & line scopes ⏸ next up
+### Phase 9 — Repertoire growth & line scopes 🚧 in progress (9a ✅ done)
 
 Two asks that are one feature: an opening should hold all its branches yet be
 drillable one line at a time, and building should happen *inside* drilling
@@ -401,7 +401,10 @@ Summary:
   free from the existing index), and optional refutation shadow lines that are
   stored but never prep and never carded.
 
-Sub-phases: **9a** scopes (no network, ship alone) · **9b** explorer cache +
+Sub-phases: **9a** scopes ✅ **done** — `moves.line_tags` (migration `0005`) with
+inherit-on-insert, `DrillRules.scope`, filtering in `buildDrillQueue` /
+`buildDailyDietQueue` / the walker build seed, an offline opening-name cache, and
+UI in drill setup + the editor · **9b** explorer cache +
 ranking · **9c** auto-expand + candidate UI + frontier prefetcher · **9d**
 mistake rehearsal.
 

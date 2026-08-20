@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   fenTurn,
+  fullOpeningName,
   isUserMove,
   mergeDrillRules,
+  normalizeLineTag,
   type Color,
   type DrillMode,
   type DrillRules,
+  type LineScope,
+  type OpeningId,
 } from '@chess-prep/shared';
 import { useAppStore } from '../store/app.ts';
 import { Btn, Card } from '../components/ui.tsx';
 import { buildDrillQueue } from '../lib/drill/queue.ts';
-import { getAllCardsLocal, mergeCardsLocal } from '../lib/idb/schema.ts';
+import { getAllCardsLocal } from '../lib/idb/schema.ts';
+import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
+import { buildDeepestOpeningIndex } from '../lib/openings/pathNames.ts';
 import { pullAll } from '../lib/srs/sync.ts';
 
 const MODES: { value: DrillMode; label: string; hint: string }[] = [
@@ -29,6 +35,7 @@ export function DrillSetup() {
   const [rules, setRules] = useState<Required<DrillRules>>(
     mergeDrillRules(active?.drillRules),
   );
+  const [openingNames, setOpeningNames] = useState<Map<string, OpeningId> | null>(null);
   const [cardCount, setCardCount] = useState<number | null>(null);
   const [dueCount, setDueCount] = useState<number | null>(null);
   const [pulling, setPulling] = useState(false);
@@ -77,6 +84,43 @@ export function DrillSetup() {
     };
   }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Opening names for this repertoire's positions — warmed from the network
+  // when possible, read from IndexedDB when not, so the scope picker and the
+  // queue preview agree with what an offline session would actually build.
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    void ensureOpeningNames([active]).then((map) => {
+      if (!cancelled) setOpeningNames(new Map(map));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scope choices offered by THIS repertoire: every distinct book name along
+  // its lines, plus every tag in use. Offering names the tree doesn't contain
+  // would just produce empty sessions.
+  const { scopeNames, scopeTags } = useMemo(() => {
+    if (!active) return { scopeNames: [] as string[], scopeTags: [] as string[] };
+    const names = new Set<string>();
+    if (openingNames) {
+      const index = buildDeepestOpeningIndex(active, openingNameLookup(openingNames));
+      for (const id of index.values()) {
+        const full = fullOpeningName(id);
+        if (full) names.add(full);
+      }
+    }
+    const tags = new Map<string, string>();
+    for (const m of active.moves) {
+      for (const t of m.lineTags ?? []) tags.set(normalizeLineTag(t), t);
+    }
+    return {
+      scopeNames: [...names].sort((a, b) => a.localeCompare(b)),
+      scopeTags: [...tags.values()].sort((a, b) => a.localeCompare(b)),
+    };
+  }, [active, openingNames]);
+
   // Live queue length preview based on current settings.
   const [previewLen, setPreviewLen] = useState<number | null>(null);
   useEffect(() => {
@@ -90,13 +134,14 @@ export function DrillSetup() {
         cards,
         mode,
         rules,
+        openingLookup: openingNames ? openingNameLookup(openingNames) : undefined,
       });
       setPreviewLen(q.length);
     })();
     return () => {
       cancelled = true;
     };
-  }, [active, mode, rules]);
+  }, [active, mode, rules, openingNames]);
 
   const startDisabled = useMemo(() => previewLen === 0, [previewLen]);
 
@@ -172,6 +217,43 @@ export function DrillSetup() {
               <div className="text-[11px] text-slate-400">{m.hint}</div>
             </button>
           ))}
+        </div>
+      </Card>
+
+      <Card title="Line">
+        <div className="flex flex-col gap-2 text-sm">
+          <select
+            value={scopeSelectValue(rules.scope)}
+            onChange={(e) => setRules((r) => ({ ...r, scope: parseScopeSelect(e.target.value) }))}
+            className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+          >
+            <option value="all">Whole repertoire</option>
+            {scopeNames.length > 0 && (
+              <optgroup label="Opening (from the ECO book)">
+                {scopeNames.map((n) => (
+                  <option key={`n:${n}`} value={`openingName:${n}`}>
+                    {n}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {scopeTags.length > 0 && (
+              <optgroup label="Tag">
+                {scopeTags.map((t) => (
+                  <option key={`t:${t}`} value={`tag:${t}`}>
+                    #{t}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          <p className="text-[11px] text-slate-400">
+            {openingNames === null
+              ? 'Loading opening names…'
+              : scopeNames.length === 0 && scopeTags.length === 0
+                ? 'No named lines cached yet — go online once to name this tree, or tag a branch in the editor.'
+                : 'Restricts this session to one line. Combines with the depth and branching rules below.'}
+          </p>
         </div>
       </Card>
 
@@ -254,6 +336,26 @@ function rulesDiffer(a: Required<DrillRules>, b: Required<DrillRules>): boolean 
     a.maxDepth !== b.maxDepth ||
     a.branching !== b.branching ||
     a.blindfold !== b.blindfold ||
-    a.evalAfterAnswer !== b.evalAfterAnswer
+    a.evalAfterAnswer !== b.evalAfterAnswer ||
+    scopeSelectValue(a.scope) !== scopeSelectValue(b.scope)
   );
+}
+
+/**
+ * `<select>` values encode the scope as `kind:value`. A scope value can itself
+ * contain a colon ("Caro-Kann Defense: Advance Variation"), so only the FIRST
+ * colon separates.
+ */
+function scopeSelectValue(scope: LineScope | undefined): string {
+  if (!scope || scope.kind === 'all' || !scope.value) return 'all';
+  return `${scope.kind}:${scope.value}`;
+}
+
+function parseScopeSelect(raw: string): LineScope {
+  const idx = raw.indexOf(':');
+  if (idx < 0) return { kind: 'all' };
+  const kind = raw.slice(0, idx);
+  const value = raw.slice(idx + 1);
+  if ((kind === 'openingName' || kind === 'tag') && value) return { kind, value };
+  return { kind: 'all' };
 }

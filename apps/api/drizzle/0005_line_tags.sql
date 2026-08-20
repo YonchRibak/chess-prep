@@ -1,0 +1,1 @@
+ALTER TABLE "moves" ADD COLUMN "line_tags" text[] DEFAULT '{}' NOT NULL;

@@ -38,6 +38,10 @@ guarantee, not a display toggle.
 80 ms debounce, process-wide in-memory cache. **Prefer `useDeepestOpeningId(pathFens)`** —
 single-FEN lookup misses transposed positions whose ancestors are named.
 
+These are for *display*. Anything that must resolve names synchronously or offline —
+i.e. [line scopes](../03-domain/opening-database.md#client-hooks) — uses `nameCache.ts` +
+`pathNames.ts` instead.
+
 ## Components
 
 [apps/web/src/components/](../../apps/web/src/components/)

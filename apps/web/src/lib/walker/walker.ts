@@ -18,8 +18,9 @@
  * Coverage is **derived, not stored**. Nothing on a Position says "covered"
  * — we compute it by inspecting that position's outgoing moves at each step.
  */
-import { fenTurn, isUserMove, type Color } from '@chess-prep/shared';
+import { fenTurn, isUserMove, matchesLineScope, type Color, type LineScope } from '@chess-prep/shared';
 import type { RepertoireFull, RepertoireMove, RepertoirePosition } from '../../api/client.ts';
+import { buildDeepestOpeningIndex, type OpeningLookup } from '../openings/pathNames.ts';
 
 export interface WalkerIndices {
   positionByKey: Map<string, RepertoirePosition>;
@@ -67,6 +68,18 @@ export interface FindNextBuildNodeOptions {
    * descend into — skipping means moving on to sibling branches.
    */
   exclude?: Set<string>;
+  /**
+   * Phase 9a: keep building, but only inside one line. A candidate node is in
+   * scope when the **edge that reached it** is — an attention node has no
+   * outgoing moves of its own, so it has no tags or name to test.
+   *
+   * Consequence worth knowing: under a non-'all' scope the root itself is never
+   * offered, because no edge leads into it. Scoped building only makes sense
+   * once the line exists; use scope 'all' to start one.
+   */
+  scope?: LineScope;
+  /** `fenKey → OpeningId`, required only for an `openingName` scope. */
+  openingLookup?: OpeningLookup;
 }
 
 /**
@@ -99,6 +112,12 @@ export function findNextBuildNode(
   if (!start) return null;
   const color = rep.color as Color;
   const exclude = options.exclude;
+  const scope = options.scope;
+  const scoped = scope !== undefined && scope.kind !== 'all' && Boolean(scope.value?.trim());
+  const deepestByPositionId =
+    scoped && scope!.kind === 'openingName'
+      ? buildDeepestOpeningIndex(rep, options.openingLookup ?? (() => null))
+      : null;
 
   // BFS queue: positions + the path-of-moves taken to reach them.
   type Step = { posId: string; path: RepertoireMove[] };
@@ -115,6 +134,16 @@ export function findNextBuildNode(
 
     if (liveOut.length === 0) {
       if (exclude?.has(pos.id)) continue; // skipped this session — move on.
+      if (scoped) {
+        const edge = path[path.length - 1];
+        const inScope =
+          edge !== undefined &&
+          matchesLineScope(scope, {
+            deepestOpening: deepestByPositionId?.get(pos.id) ?? null,
+            lineTags: edge.lineTags ?? [],
+          });
+        if (!inScope) continue; // out of the scoped line — keep looking.
+      }
       return {
         position: pos,
         kind: userTurn ? 'user-prep' : 'opponent-picks',
@@ -146,8 +175,9 @@ export function findNextBuildNodeFrom(
   indices: WalkerIndices,
   fromFenKey: string,
   exclude?: Set<string>,
+  scopeOptions?: Pick<FindNextBuildNodeOptions, 'scope' | 'openingLookup'>,
 ): WalkerNode | null {
-  return findNextBuildNode(rep, indices, { fromFenKey, exclude });
+  return findNextBuildNode(rep, indices, { fromFenKey, exclude, ...scopeOptions });
 }
 
 /**

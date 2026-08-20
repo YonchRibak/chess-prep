@@ -23,10 +23,10 @@ function makeRep(): RepertoireFull {
       { id: 'p4', fenKey: 'after-Nf3', fullFen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2' },
     ],
     moves: [
-      { id: 'm-e4', parentPositionId: 'p0', childPositionId: 'p1', parentFenKey: 'r0', childFenKey: 'r1', san: 'e4', uci: 'e2e4', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false },
-      { id: 'm-d4', parentPositionId: 'p0', childPositionId: 'p2', parentFenKey: 'r0', childFenKey: 'r2', san: 'd4', uci: 'd2d4', comment: null, annotation: null, isMainLine: false, priority: 0, isDropped: false },
-      { id: 'm-e5', parentPositionId: 'p1', childPositionId: 'p3', parentFenKey: 'r1', childFenKey: 'r3', san: 'e5', uci: 'e7e5', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false },
-      { id: 'm-Nf3', parentPositionId: 'p3', childPositionId: 'p4', parentFenKey: 'r3', childFenKey: 'r4', san: 'Nf3', uci: 'g1f3', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false },
+      { id: 'm-e4', parentPositionId: 'p0', childPositionId: 'p1', parentFenKey: 'r0', childFenKey: 'r1', san: 'e4', uci: 'e2e4', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [] },
+      { id: 'm-d4', parentPositionId: 'p0', childPositionId: 'p2', parentFenKey: 'r0', childFenKey: 'r2', san: 'd4', uci: 'd2d4', comment: null, annotation: null, isMainLine: false, priority: 0, isDropped: false, lineTags: [] },
+      { id: 'm-e5', parentPositionId: 'p1', childPositionId: 'p3', parentFenKey: 'r1', childFenKey: 'r3', san: 'e5', uci: 'e7e5', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [] },
+      { id: 'm-Nf3', parentPositionId: 'p3', childPositionId: 'p4', parentFenKey: 'r3', childFenKey: 'r4', san: 'Nf3', uci: 'g1f3', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [] },
     ],
   };
 }
@@ -144,6 +144,86 @@ describe('buildDrillQueue', () => {
     const fixed = mulberry32(42);
     const q = buildDrillQueue({ repertoire: rep, cards, mode: 'random', rules: {}, now: NOW, rng: fixed });
     expect(new Set(q.map((it) => it.move.san))).toEqual(new Set(['e4', 'd4', 'Nf3']));
+  });
+});
+
+/* ---------------- Phase 9a line scopes ---------------- */
+
+describe('buildDrillQueue line scopes', () => {
+  const allCards = () => [makeCard('m-e4', -60), makeCard('m-d4', -60), makeCard('m-Nf3', -60)];
+
+  it('tag scope keeps only cards on tagged edges', () => {
+    const rep = makeRep();
+    rep.moves = rep.moves.map((m) =>
+      m.id === 'm-d4' ? { ...m, lineTags: ['vs-danny'] } : m,
+    );
+    const q = buildDrillQueue({
+      repertoire: rep,
+      cards: allCards(),
+      mode: 'due',
+      rules: { scope: { kind: 'tag', value: 'vs-danny' } },
+      now: NOW,
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['d4']);
+  });
+
+  it('opening-name scope follows the deepest name along the path', () => {
+    const rep = makeRep();
+    // Only the position after 1.e4 is named; 2.Nf3 inherits that name by path
+    // walk, while the 1.d4 branch never enters the line.
+    const named = new Map([
+      ['after-e4', { eco: 'B00', name: "King's Pawn Game", variation: null }],
+    ]);
+    const q = buildDrillQueue({
+      repertoire: rep,
+      cards: allCards(),
+      mode: 'due',
+      rules: { scope: { kind: 'openingName', value: "King's Pawn Game" } },
+      now: NOW,
+      openingLookup: (k) => named.get(k) ?? null,
+    });
+    expect(q.map((it) => it.move.san).sort()).toEqual(['Nf3', 'e4']);
+  });
+
+  it('an opening-name scope with no lookup yields an empty queue, not the whole tree', () => {
+    // Fail closed: a silently unfiltered "scoped" session is worse than an
+    // obviously empty one, because it looks like a correct session.
+    const q = buildDrillQueue({
+      repertoire: makeRep(),
+      cards: allCards(),
+      mode: 'due',
+      rules: { scope: { kind: 'openingName', value: "King's Pawn Game" } },
+      now: NOW,
+    });
+    expect(q).toEqual([]);
+  });
+
+  it('composes with the depth rules rather than replacing them', () => {
+    const rep = makeRep();
+    rep.moves = rep.moves.map((m) => ({ ...m, lineTags: ['blitz'] }));
+    const q = buildDrillQueue({
+      repertoire: rep,
+      cards: allCards(),
+      mode: 'due',
+      rules: { scope: { kind: 'tag', value: 'blitz' }, minDepth: 2 },
+      now: NOW,
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['Nf3']);
+  });
+
+  it('walkthrough does not auto-play a scoped-out USER move as an opponent reply', () => {
+    // 2.Nf3 is filtered out by depth; it is still white's move, so it must not
+    // be wired as the opponent response after 1.e4.
+    const rep = makeRep();
+    const q = buildDrillQueue({
+      repertoire: rep,
+      cards: allCards(),
+      mode: 'walkthrough',
+      rules: { maxDepth: 1 },
+      now: NOW,
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['e4']);
+    expect(q[0]!.opponentResponseSan).toBe('e5');
   });
 });
 

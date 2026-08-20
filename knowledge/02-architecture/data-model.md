@@ -2,7 +2,7 @@
 
 Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
-`0003_drop_branch`, `0004_user_settings`.
+`0003_drop_branch`, `0004_user_settings`, `0005_line_tags`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -27,7 +27,7 @@ read it through `mergeDrillRules()` rather than assuming fields exist.
 ### `moves`
 The edge, and the unit of prep:
 `repertoire_id`, `parent_position_id`, `child_position_id`, `san`, `uci`, `comment`,
-`annotation`, `is_main_line`, `priority`, `is_dropped`.
+`annotation`, `is_main_line`, `priority`, `is_dropped`, `line_tags[]`.
 
 Unique `uniq_parent_san (repertoire_id, parent_position_id, san)` — no duplicate SAN
 from one parent, but **multiple distinct children per parent are intentionally allowed**
@@ -39,6 +39,15 @@ Opening identity is **not** denormalized here — look it up via `fenKey()` agai
 `is_dropped` (migration `0003`) is the persistent "won't cover" marker. Both
 `buildDrillQueue` and the walker's BFS treat dropped moves as nonexistent, subtree
 included.
+
+`line_tags` (migration `0005`, Phase 9a) is explicit line membership for what the ECO
+book can't name — `vs-danny`, `blitz-only`. It is **inherited from the parent edge on
+insert** (`inheritLineTags` in [scope.ts](../../packages/shared/src/scope.ts)); supplying
+tags explicitly *replaces* the inherited set and re-roots inheritance below. Without
+inheritance a move added under a tagged branch point would be born untagged and silently
+vanish from a tag-scoped session — a session that looks complete and isn't. Retagging an
+existing edge therefore cascades over its subtree (`retagSubtree`). See
+[srs-drilling](../03-domain/srs-drilling.md#line-scopes-phase-9a).
 
 ### `srs_cards`
 One card per prep move. Stores raw FSRS state — `due`, `stability`, `difficulty`,

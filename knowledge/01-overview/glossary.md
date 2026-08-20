@@ -23,15 +23,20 @@ Terms used consistently across code, spec, and these docs.
 | **Classic drill** | The pre-walker Phase 3 drill UI ([DrillSession.tsx](../../apps/web/src/pages/DrillSession.tsx)). Still reachable; slated for merge into the walker. |
 | **Ply** | A single half-move. Depths throughout the code are in plies from the repertoire root. |
 
-## Phase 9 terms — designed, not built
+## Phase 9a terms — built
+
+| Term | Meaning |
+|---|---|
+| **Scope** | A predicate selecting a subset of a repertoire for a session — *derived* from the ECO deepest name, or *explicit* via `line_tags`. A line is a scope, never a copied tree. `DrillRules.scope`; see [srs-drilling](../03-domain/srs-drilling.md#line-scopes-phase-9a). |
+| **Line tag** | A label on a `Move`, inherited from the parent edge at insert time, for what the book can't express (`vs-danny`, `blitz-only`). Column `moves.line_tags`. |
+
+## Phase 9b–9d terms — designed, not built
 
 These appear in [repertoire-growth](../03-domain/repertoire-growth.md) only. No code uses
 them yet; don't assume a symbol exists because a term does.
 
 | Term | Meaning |
 |---|---|
-| **Scope** | A predicate selecting a subset of a repertoire for a session — *derived* from the ECO deepest name, or *explicit* via `line_tags`. A line is a scope, never a copied tree. |
-| **Line tag** | A label on a `Move`, inherited by descendants at insert time, for what the book can't express (`vs-danny`, `blitz-only`). |
 | **Frontier** | Positions one ply past current coverage — what the prefetcher warms so candidates are instant. |
 | **Interference** | Playing the SAN that is your correct prep at a *different* position. The common transposition confusion, worth naming explicitly to the user. |
 | **Shadow line** | A stored refutation of a mistake. Never prep, never carded, never walked by the build seed. |

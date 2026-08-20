@@ -40,6 +40,7 @@ import { MoveLine } from '../components/MoveLine.tsx';
 import { BuilderPrompt } from '../components/BuilderPrompt.tsx';
 import { api, ApiError, type RepertoireFull, type RepertoireMove, type RepertoirePosition } from '../api/client.ts';
 import { getAllCardsLocal } from '../lib/idb/schema.ts';
+import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import { gradeAndQueue } from '../lib/srs/sync.ts';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
@@ -52,6 +53,7 @@ import {
   findNextBuildNode,
   findPathToPosition,
   pickOpponentReplyForDrill,
+  type FindNextBuildNodeOptions,
   type WalkerIndices,
   type WalkerNode,
 } from '../lib/walker/walker.ts';
@@ -196,6 +198,14 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
 
   /* ---------------- session bootstrap ---------------- */
 
+  /**
+   * Phase 9a scope, resolved once at session start and reused by every later
+   * `resumeBuild`. Held in a ref rather than state because the resume path
+   * runs from event handlers — a stale closure over the scope would quietly
+   * drop the walker back to building the whole tree.
+   */
+  const scopeOptionsRef = useRef<Pick<FindNextBuildNodeOptions, 'scope' | 'openingLookup'>>({});
+
   /* ---------------- engine (build mode only) ---------------- */
 
   // Phase 8b gating, refined: the hard gate follows the PHASE, not the whole
@@ -237,8 +247,18 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
     setPendingSwap(null);
 
     (async () => {
+      // Phase 9a: the repertoire's line scope steers BOTH seeds — building
+      // inside one line, and drilling only that line's cards.
+      const names = await ensureOpeningNames([active]);
+      if (cancelled) return;
+      const scopeOptions = {
+        scope: mergeDrillRules(active.drillRules).scope,
+        openingLookup: openingNameLookup(names),
+      };
+      scopeOptionsRef.current = scopeOptions;
+
       if (seed === 'build') {
-        const node = findNextBuildNode(active, indices);
+        const node = findNextBuildNode(active, indices, scopeOptions);
         if (cancelled) return;
         if (!node) {
           setPhase({ kind: 'complete', reason: 'no-more-attention' });
@@ -256,6 +276,7 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
           cards,
           mode: 'due',
           rules: rules2,
+          openingLookup: scopeOptions.openingLookup,
         });
         if (cancelled) return;
         setDrillQueue(queue);
@@ -333,9 +354,10 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
     if (!next) return;
     const idx = buildIndices(next);
     const exclude = sessionSkippedRef.current;
-    let node = findNextBuildNode(next, idx, { fromFenKey, exclude });
+    const scopeOptions = scopeOptionsRef.current;
+    let node = findNextBuildNode(next, idx, { fromFenKey, exclude, ...scopeOptions });
     if (!node && fromFenKey) {
-      node = findNextBuildNode(next, idx, { exclude });
+      node = findNextBuildNode(next, idx, { exclude, ...scopeOptions });
     }
     if (!node) {
       setPhase({ kind: 'complete', reason: 'no-more-attention' });

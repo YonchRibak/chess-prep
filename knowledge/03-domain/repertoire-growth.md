@@ -1,9 +1,17 @@
 # Repertoire growth & line scopes
 
-**Status: designed, NOT built.** Nothing in this document exists in the code yet — no
-tables, no modules, no UI. It is the design for Phase 9 (see
-[roadmap](../06-workflows/roadmap.md) and PROJECT_SPEC §5). Read it as intent, not as
-current state; everything else in `knowledge/` describes what is actually shipped.
+**Status: 9a is BUILT; 9b–9d are designed, NOT built.**
+
+- **Line scopes (9a) are shipped** — `moves.line_tags`, `DrillRules.scope`, and the
+  filtering in both queue builders and the walker's build seed. The authoritative
+  description of what exists is
+  [srs-drilling](srs-drilling.md#line-scopes-phase-9a); the section below is the design
+  it was built from and may differ in detail from the code.
+- **Everything else here — the explorer cache, candidate ranking, auto-expansion, the
+  frontier prefetcher, `drill_attempts`, interference detection, shadow lines — has no
+  tables, no modules, and no UI.** Read those parts as intent, not current state.
+
+See [roadmap](../06-workflows/roadmap.md) and PROJECT_SPEC §5.
 
 Related: [walker](walker.md) · [srs-drilling](srs-drilling.md) ·
 [opening-database](opening-database.md) · [engine](engine.md) ·
@@ -161,14 +169,14 @@ three things the counter cannot:
 The log also feeds growth: expand the frontier where the user is weak rather than
 uniformly.
 
-## Data model deltas (none applied yet)
+## Data model deltas
 
 | Change | Table | Note |
 |---|---|---|
-| `line_tags text[] not null default '{}'` | `moves` | Inherited on insert |
+| `line_tags text[] not null default '{}'` | `moves` | ✅ applied, migration `0005_line_tags`. Inherited on insert |
 | new `explorer_entries` | — | Cache; safe to truncate |
 | new `drill_attempts` | — | Append-only; cascade from `moves` |
-| `scope` field | `repertoires.drill_rules` (jsonb) | Partial, via `mergeDrillRules()` |
+| `scope` field | `repertoires.drill_rules` (jsonb) | ✅ shipped. Partial, via `mergeDrillRules()`; validated on write by `parseLineScope` |
 
 Refutation shadow lines need a marker on `moves` distinguishing them from prep — either a
 value in `line_tags` or a dedicated column. Prefer a dedicated column if the walker,
@@ -185,7 +193,7 @@ one prep row per `(user, parent_position)` beyond the existing constraint.
 
 | | Work | Unlocks |
 |---|---|---|
-| **9a** | `line_tags` + inherit-on-insert; derived opening-name scope; `DrillRules.scope` + picker | Request 1, entirely — no network |
+| **9a** ✅ | `line_tags` + inherit-on-insert; derived opening-name scope; `DrillRules.scope` + picker | Request 1, entirely — no network |
 | **9b** | `explorer_entries` + Lichess explorer client in `packages/shared`; candidate ranking | The supply side of request 2 |
 | **9c** | Opponent auto-expand; ranked candidate UI in the build phase; frontier prefetcher | Request 2 — the seamless part |
 | **9d** | `drill_attempts`; mistakes scope; interference detection; refutation shadow lines | Mistake rehearsal |

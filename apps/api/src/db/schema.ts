@@ -74,6 +74,11 @@ export const moves = pgTable(
     // session). Cards on dropped user-side moves are kept for SRS history
     // intent but the walker won't drill them.
     isDropped: boolean('is_dropped').notNull().default(false),
+    // Phase 9a: explicit line membership, for what the ECO book can't express
+    // ("vs-danny", "blitz-only"). Inherited from the parent edge on insert —
+    // an untagged move under a tagged branch point would silently drop out of
+    // a tag-scoped session. See packages/shared/src/scope.ts.
+    lineTags: text('line_tags').array().notNull().default([]),
   },
   (t) => [unique('uniq_parent_san').on(t.repertoireId, t.parentPositionId, t.san)],
 );

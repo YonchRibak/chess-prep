@@ -3,7 +3,9 @@ import { Chess } from 'chess.js';
 import {
   fenKey as makeFenKey,
   fenTurn,
+  inheritLineTags,
   isUserMove,
+  parseLineScope,
   pgnToTree,
   treeToPgn,
   STARTING_FEN,
@@ -53,6 +55,7 @@ export interface RepertoireFull extends RepertoireSummary {
     isMainLine: boolean;
     priority: number;
     isDropped: boolean;
+    lineTags: string[];
   }[];
 }
 
@@ -175,6 +178,7 @@ export async function getRepertoire(userId: string, id: string): Promise<Reperto
       isMainLine: m.isMainLine,
       priority: m.priority,
       isDropped: m.isDropped,
+      lineTags: m.lineTags,
     })),
   };
 }
@@ -223,6 +227,7 @@ export interface AddedMove {
   comment: string | null;
   annotation: string | null;
   isDropped: boolean;
+  lineTags: string[];
   /** True if this call also created a new position node (vs. linking to existing). */
   childPositionCreated: boolean;
 }
@@ -230,11 +235,18 @@ export interface AddedMove {
 export async function addMove(
   userId: string,
   repertoireId: string,
-  input: { parentFenKey: unknown; san: unknown; isMainLine?: unknown; onConflict?: unknown },
+  input: {
+    parentFenKey: unknown;
+    san: unknown;
+    isMainLine?: unknown;
+    onConflict?: unknown;
+    lineTags?: unknown;
+  },
 ): Promise<AddedMove> {
   if (typeof input.parentFenKey !== 'string') throw new HttpError(400, 'parentFenKey is required');
   if (typeof input.san !== 'string') throw new HttpError(400, 'san is required');
   const onConflict = parseOnConflict(input.onConflict);
+  const explicitTags = parseLineTags(input.lineTags);
 
   return await db.transaction(async (tx) => {
     // 1. Verify repertoire ownership and grab root for context.
@@ -293,6 +305,10 @@ export async function addMove(
 
     // 6. Insert or fetch the move (unique on parent + san).
     const isMainLine = Boolean(input.isMainLine ?? false);
+    const lineTags = inheritLineTags(
+      await parentEdgeTags(tx, repertoireId, parent.id),
+      explicitTags,
+    );
     const inserted = await tx
       .insert(moves)
       .values({
@@ -303,6 +319,7 @@ export async function addMove(
         uci: moveObj.from + moveObj.to + (moveObj.promotion ?? ''),
         isMainLine,
         priority: 0,
+        lineTags,
       })
       .onConflictDoNothing()
       .returning();
@@ -348,6 +365,7 @@ export async function addMove(
       comment: moveRow.comment,
       annotation: moveRow.annotation,
       isDropped: moveRow.isDropped,
+      lineTags: moveRow.lineTags,
       childPositionCreated,
     };
   });
@@ -373,7 +391,7 @@ export async function addMove(
 export async function appendLine(
   userId: string,
   repertoireId: string,
-  input: { fromFenKey: unknown; sans: unknown; onConflict?: unknown },
+  input: { fromFenKey: unknown; sans: unknown; onConflict?: unknown; lineTags?: unknown },
 ): Promise<{ added: number; reused: number; finalFenKey: string }> {
   if (typeof input.fromFenKey !== 'string') throw new HttpError(400, 'fromFenKey is required');
   if (!Array.isArray(input.sans) || input.sans.some((s) => typeof s !== 'string')) {
@@ -381,6 +399,7 @@ export async function appendLine(
   }
   const sans = input.sans as string[];
   const onConflict = parseOnConflict(input.onConflict);
+  const explicitTags = parseLineTags(input.lineTags);
 
   return await db.transaction(async (tx) => {
     const rep = await tx.query.repertoires.findFirst({
@@ -401,6 +420,7 @@ export async function appendLine(
       fromPosition: { id: initial.id, fenKey: initial.fenKey, fullFen: initial.fullFen },
       sans,
       onConflict,
+      lineTags: explicitTags,
     });
 
     if (result.added > 0) {
@@ -420,6 +440,7 @@ export async function patchMove(
     isMainLine?: unknown;
     priority?: unknown;
     isDropped?: unknown;
+    lineTags?: unknown;
   },
 ): Promise<void> {
   // Verify ownership via join: look up the move and check the repertoire.
@@ -455,9 +476,24 @@ export async function patchMove(
   }
   if (input.isDropped !== undefined) update.isDropped = Boolean(input.isDropped);
 
-  if (Object.keys(update).length === 0) return;
-  await db.update(moves).set(update).where(eq(moves.id, moveId));
-  await db.update(repertoires).set({ updatedAt: new Date() }).where(eq(repertoires.id, repertoireId));
+  // Phase 9a: retagging an edge re-roots inheritance, so it cascades to the
+  // subtree below (see retagSubtree) — a tag on the branch point alone would
+  // scope a session down to a single move.
+  const newTags = input.lineTags === undefined ? undefined : parseLineTags(input.lineTags) ?? [];
+
+  if (Object.keys(update).length === 0 && newTags === undefined) return;
+  await db.transaction(async (tx) => {
+    if (Object.keys(update).length > 0) {
+      await tx.update(moves).set(update).where(eq(moves.id, moveId));
+    }
+    if (newTags !== undefined) {
+      await retagSubtree(tx, repertoireId, move, newTags);
+    }
+    await tx
+      .update(repertoires)
+      .set({ updatedAt: new Date() })
+      .where(eq(repertoires.id, repertoireId));
+  });
 }
 
 export async function deleteMove(userId: string, repertoireId: string, moveId: string): Promise<void> {
@@ -596,9 +632,19 @@ export async function patchDrillRules(
   if (!rules || typeof rules !== 'object') {
     throw new HttpError(400, 'drillRules must be an object');
   }
+  // Rules are stored as opaque partial jsonb, but a malformed `scope` would
+  // only surface later as a session that silently drills the wrong set — so
+  // validate that one field on the way in.
+  let normalized = rules as DrillRules;
+  try {
+    const scope = parseLineScope((rules as DrillRules).scope);
+    if (scope) normalized = { ...normalized, scope };
+  } catch (e) {
+    throw new HttpError(400, (e as Error).message);
+  }
   const [row] = await db
     .update(repertoires)
-    .set({ drillRules: rules as DrillRules, updatedAt: new Date() })
+    .set({ drillRules: normalized, updatedAt: new Date() })
     .where(and(eq(repertoires.id, id), eq(repertoires.userId, userId)))
     .returning();
   if (!row) throw new HttpError(404, 'Repertoire not found');
@@ -637,6 +683,19 @@ export async function exportPgn(userId: string, repertoireId: string): Promise<s
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 type OnConflict = 'refuse' | 'swap';
+
+/**
+ * Explicit `line_tags` from a request body. `undefined` means "inherit"; an
+ * empty array means "clear inheritance here" — the two are deliberately not the
+ * same thing.
+ */
+function parseLineTags(raw: unknown): string[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw) || raw.some((t) => typeof t !== 'string')) {
+    throw new HttpError(400, 'lineTags must be an array of strings');
+  }
+  return inheritLineTags(null, raw as string[]);
+}
 
 function parseOnConflict(raw: unknown): OnConflict {
   if (raw === undefined || raw === null) return 'refuse';
@@ -679,12 +738,97 @@ async function enforceOnePrepPerUserPosition(
   await tx.delete(moves).where(eq(moves.id, conflicting.id));
 }
 
+/**
+ * Phase 9a: the `line_tags` a move inserted at `parentPositionId` should
+ * inherit — the tags of the edge leading *into* that parent.
+ *
+ * A position can have several incoming edges (transpositions collapse to one
+ * node), so the choice is made deterministic: main line first, then priority,
+ * then SAN. Picking arbitrarily would make the same build action produce
+ * different tags on different runs, which is exactly the kind of silent drift
+ * scopes exist to avoid.
+ */
+async function parentEdgeTags(
+  tx: Tx,
+  repertoireId: string,
+  parentPositionId: string,
+): Promise<string[]> {
+  const incoming = await tx
+    .select({
+      lineTags: moves.lineTags,
+      isMainLine: moves.isMainLine,
+      priority: moves.priority,
+      san: moves.san,
+    })
+    .from(moves)
+    .where(
+      and(eq(moves.repertoireId, repertoireId), eq(moves.childPositionId, parentPositionId)),
+    );
+  if (incoming.length === 0) return []; // the root has no incoming edge.
+  incoming.sort((a, b) => {
+    if (a.isMainLine !== b.isMainLine) return a.isMainLine ? -1 : 1;
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.san.localeCompare(b.san);
+  });
+  return incoming[0]!.lineTags ?? [];
+}
+
+/**
+ * Retagging an existing edge re-roots inheritance, so the tags must be pushed
+ * down the live subtree — otherwise tagging a branch point after the fact tags
+ * exactly one move and a tag-scoped session drills that one move.
+ *
+ * Walks live *and* dropped edges: a dropped branch can be un-dropped later, and
+ * finding it untagged then would be the same silent gap.
+ */
+async function retagSubtree(
+  tx: Tx,
+  repertoireId: string,
+  rootMove: { id: string; childPositionId: string },
+  tags: string[],
+): Promise<void> {
+  const all = await tx
+    .select({
+      id: moves.id,
+      parentPositionId: moves.parentPositionId,
+      childPositionId: moves.childPositionId,
+    })
+    .from(moves)
+    .where(eq(moves.repertoireId, repertoireId));
+  const byParent = new Map<string, typeof all>();
+  for (const m of all) {
+    const arr = byParent.get(m.parentPositionId) ?? [];
+    arr.push(m);
+    byParent.set(m.parentPositionId, arr);
+  }
+
+  const ids = [rootMove.id];
+  const seenPositions = new Set<string>([rootMove.childPositionId]);
+  const queue = [rootMove.childPositionId];
+  while (queue.length > 0) {
+    const posId = queue.shift()!;
+    for (const m of byParent.get(posId) ?? []) {
+      ids.push(m.id);
+      if (seenPositions.has(m.childPositionId)) continue; // cycle via transposition
+      seenPositions.add(m.childPositionId);
+      queue.push(m.childPositionId);
+    }
+  }
+  await tx.update(moves).set({ lineTags: tags }).where(inArray(moves.id, ids));
+}
+
 interface AppendLineCoreParams {
   userId: string;
   repertoire: { id: string; color: Color };
   fromPosition: { id: string; fenKey: string; fullFen: string };
   sans: string[];
   onConflict: OnConflict;
+  /**
+   * Phase 9a: tags for every move this call inserts. When omitted, each new
+   * move inherits from the edge above it, so appending inside a tagged branch
+   * keeps the branch's tags without the caller having to know them.
+   */
+  lineTags?: string[];
 }
 
 /**
@@ -702,6 +846,13 @@ async function appendLineCore(
   let cursorFenKey = cursor.fenKey;
   let added = 0;
   let reused = 0;
+  // Tags carried down the line: seeded from the edge into `fromPosition` (or
+  // replaced wholesale when the caller supplied its own), then threaded
+  // through the walk so each new move inherits from the one just inserted.
+  let inheritedTags = inheritLineTags(
+    await parentEdgeTags(tx, params.repertoire.id, params.fromPosition.id),
+    params.lineTags,
+  );
 
   for (const san of params.sans) {
     const chess = new Chess(cursor.fullFen);
@@ -756,6 +907,7 @@ async function appendLineCore(
         uci: moveObj.from + moveObj.to + (moveObj.promotion ?? ''),
         isMainLine: false,
         priority: 0,
+        lineTags: inheritedTags,
       })
       .onConflictDoNothing()
       .returning();
@@ -780,6 +932,11 @@ async function appendLineCore(
           .onConflictDoNothing();
       }
     }
+
+    // A reused edge keeps its own tags and becomes the parent for what follows,
+    // so the line below a pre-existing branch inherits from that branch rather
+    // than from where this call happened to start.
+    inheritedTags = params.lineTags ?? inheritLineTags(moveRow.lineTags);
 
     cursor = child;
     cursorFenKey = childFenKey;
@@ -812,6 +969,7 @@ async function getRepertoireWithTx(tx: Tx, userId: string, id: string): Promise<
       isMainLine: m.isMainLine,
       priority: m.priority,
       isDropped: m.isDropped,
+      lineTags: m.lineTags,
     })),
   };
 }

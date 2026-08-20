@@ -36,6 +36,13 @@
       "when": 1782080500000,
       "tag": "0004_user_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787239688770,
+      "tag": "0005_line_tags",
+      "breakpoints": true
     }
   ]
 }

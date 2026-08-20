@@ -39,11 +39,24 @@ Options:
 - `exclude: Set<positionId>` — session-local **skip**. Since an attention node has zero
   live children by definition, there's nothing to descend into; skipping just moves to
   the next sibling branch.
+- `scope` / `openingLookup` — Phase 9a, see below.
 
 Dropped moves and their entire subtrees are skipped. Returns `null` when everything
 reachable is covered.
 
 `findNextBuildNodeFrom(...)` is the localized variant used after drill-pauses-for-build.
+
+### Scoped building
+
+With a [line scope](srs-drilling.md#line-scopes-phase-9a) the build seed keeps building
+*inside one line*. A candidate node is judged by the **edge that reached it** — an
+attention node has no outgoing moves, so it has no tags or name of its own.
+
+Consequence worth knowing: under a non-`all` scope the **root is never offered**, because
+no edge leads into it. Scoped building only makes sense once the line exists; starting one
+needs scope `all`. `WalkerSession` resolves the scope once at session start and holds it
+in a ref, so the `resumeBuild` path can't close over a stale value and quietly fall back
+to building the whole tree.
 
 ## Drill seed
 

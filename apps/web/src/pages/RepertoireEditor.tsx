@@ -20,6 +20,7 @@ export function RepertoireEditor() {
   const setComment = useAppStore((s) => s.setComment);
   const setAnnotation = useAppStore((s) => s.setAnnotation);
   const setMainLine = useAppStore((s) => s.setMainLine);
+  const setLineTags = useAppStore((s) => s.setLineTags);
   const deleteMove = useAppStore((s) => s.deleteMove);
   const exportPgnFn = useAppStore((s) => s.exportPgn);
 
@@ -386,6 +387,7 @@ export function RepertoireEditor() {
               move={lastMove}
               onCommentChange={(c) => void setComment(lastMove.id, c || null)}
               onAnnotationChange={(a) => void setAnnotation(lastMove.id, a || null)}
+              onLineTagsChange={(t) => void setLineTags(lastMove.id, t)}
             />
           )}
 
@@ -512,13 +514,16 @@ function MoveDetails({
   move,
   onCommentChange,
   onAnnotationChange,
+  onLineTagsChange,
 }: {
   move: RepertoireMove;
   onCommentChange: (comment: string) => void;
   onAnnotationChange: (annotation: string) => void;
+  onLineTagsChange: (tags: string[]) => void;
 }) {
   const [comment, setCommentLocal] = useState(move.comment ?? '');
   const [annotation, setAnnotationLocal] = useState(move.annotation ?? '');
+  const [lineTags, setLineTagsLocal] = useState((move.lineTags ?? []).join(', '));
 
   // Commit on blur — avoids API call per keystroke.
   return (
@@ -546,6 +551,26 @@ function MoveDetails({
             }}
             className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-mono"
           />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-slate-400">Line tags (comma-separated)</span>
+          <input
+            value={lineTags}
+            onChange={(e) => setLineTagsLocal(e.target.value)}
+            onBlur={() => {
+              const next = lineTags
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean);
+              if (next.join(', ') !== (move.lineTags ?? []).join(', ')) onLineTagsChange(next);
+            }}
+            placeholder="vs-danny, blitz-only"
+            className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-mono"
+          />
+          <span className="text-[10px] text-slate-500">
+            Applies to this move and everything below it — drill one line by picking the tag
+            in Drill setup.
+          </span>
         </label>
       </div>
     </Card>

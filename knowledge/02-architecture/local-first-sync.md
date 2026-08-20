@@ -8,7 +8,7 @@ card fields.
 ## IndexedDB
 
 [apps/web/src/lib/idb/schema.ts](../../apps/web/src/lib/idb/schema.ts) — database
-`chess-prep`, version 1, via `idb`. Four object stores:
+`chess-prep`, version 2, via `idb`. Five object stores:
 
 | Store | Key | Purpose |
 |---|---|---|
@@ -16,6 +16,7 @@ card fields.
 | `repertoires` | `id` | Full `RepertoireFull` snapshots for offline reads. |
 | `meta` | string key | Small KV — notably `srs.lastSyncedAt`. |
 | `pushQueue` | `moveId` | Graded cards awaiting upload. |
+| `openingNames` | `fenKey` | Phase 9a: book names for the user's own positions, so `openingName` [line scopes](../03-domain/srs-drilling.md#line-scopes-phase-9a) resolve offline. Cache only — safe to clear, refills from `POST /openings/by-fens`. |
 
 Note `srsCards` is keyed by `moveId`, not card `id` — consistent with "one card per
 move".
@@ -58,3 +59,8 @@ counts with no network.
 Repertoire *mutations* (adding moves, creating repertoires, PGN import/export) go
 straight to the API — there is no write queue for tree edits, only for card grades.
 Build mode therefore needs connectivity; drill mode does not.
+
+The **opening book** is likewise online-only, except for the `openingNames` cache above.
+A repertoire whose names were never fetched can still be drilled unscoped; only an
+`openingName` scope degrades, and it degrades to an empty queue rather than a silently
+unfiltered one.

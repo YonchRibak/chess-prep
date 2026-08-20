@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { SrsCardDto } from '@chess-prep/shared';
+import type { OpeningId, SrsCardDto } from '@chess-prep/shared';
 import type { RepertoireFull } from '../../api/client.ts';
 
 /**
@@ -9,6 +9,9 @@ import type { RepertoireFull } from '../../api/client.ts';
  * - repertoires: keyed by id; full cached snapshot for offline reads.
  * - meta: small key-value store (e.g., lastSyncedAt).
  * - pushQueue: cards waiting to be pushed to the server.
+ * - openingNames: fenKey → book name (Phase 9a), so opening-name line scopes
+ *   can be evaluated during an offline session. A cache only — the book itself
+ *   still lives on the server (see lib/openings/nameCache.ts).
  */
 interface ChessPrepDB extends DBSchema {
   srsCards: {
@@ -29,13 +32,20 @@ interface ChessPrepDB extends DBSchema {
     key: string;
     value: SrsCardDto;
   };
+  openingNames: {
+    // key is the normalized fenKey
+    key: string;
+    value: { fenKey: string; opening: OpeningId };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<ChessPrepDB>> | null = null;
 
 export function getDb(): Promise<IDBPDatabase<ChessPrepDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<ChessPrepDB>('chess-prep', 1, {
+    // v2 added `openingNames` (Phase 9a). The upgrade handler is additive and
+    // idempotent, so an existing v1 database keeps its cards and repertoires.
+    dbPromise = openDB<ChessPrepDB>('chess-prep', 2, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('srsCards')) {
           const cards = db.createObjectStore('srsCards', { keyPath: 'moveId' });
@@ -50,6 +60,9 @@ export function getDb(): Promise<IDBPDatabase<ChessPrepDB>> {
         }
         if (!db.objectStoreNames.contains('pushQueue')) {
           db.createObjectStore('pushQueue', { keyPath: 'moveId' });
+        }
+        if (!db.objectStoreNames.contains('openingNames')) {
+          db.createObjectStore('openingNames', { keyPath: 'fenKey' });
         }
       },
     });
@@ -128,6 +141,24 @@ export async function getMeta(key: string): Promise<string | undefined> {
 export async function setMeta(key: string, value: string): Promise<void> {
   const db = await getDb();
   await db.put('meta', value, key);
+}
+
+/* ---------------- opening names (Phase 9a) ---------------- */
+
+export async function putOpeningNamesLocal(
+  entries: Array<{ fenKey: string; opening: OpeningId }>,
+): Promise<void> {
+  if (entries.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('openingNames', 'readwrite');
+  await Promise.all(entries.map((e) => tx.store.put(e)));
+  await tx.done;
+}
+
+export async function getAllOpeningNamesLocal(): Promise<Map<string, OpeningId>> {
+  const db = await getDb();
+  const rows = await db.getAll('openingNames');
+  return new Map(rows.map((r) => [r.fenKey, r.opening]));
 }
 
 /* ---------------- push queue ---------------- */

@@ -5,6 +5,7 @@ import {
   getOpeningByFenKey,
   identifyDeepestOpeningFromPath,
   listOpenings,
+  lookupOpeningsByFenKeys,
   validateAndNormalizeFenKey,
 } from '../services/openings.js';
 
@@ -59,6 +60,31 @@ openingRoutes.get('/continuations/:fenKey', async (c) => {
     const normalized = validateAndNormalizeFenKey(param);
     const rows = await getBookContinuations(normalized);
     return c.json(rows);
+  } catch (e) {
+    if (e instanceof HttpError) return c.json({ error: e.message }, e.status as 400 | 404 | 500);
+    console.error(e);
+    return c.json({ error: 'Internal error' }, 500);
+  }
+});
+
+/**
+ * Phase 9a: bulk name lookup so the client can cache a whole repertoire's
+ * opening names for offline scope filtering (see lookupOpeningsByFenKeys).
+ */
+openingRoutes.post('/by-fens', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body || !Array.isArray(body.fenKeys)) {
+    return c.json({ error: 'expected { fenKeys: string[] }' }, 400);
+  }
+  try {
+    const keys: string[] = [];
+    for (const k of body.fenKeys) {
+      if (typeof k !== 'string') {
+        return c.json({ error: 'fenKeys must be an array of strings' }, 400);
+      }
+      keys.push(validateAndNormalizeFenKey(k));
+    }
+    return c.json({ openings: await lookupOpeningsByFenKeys(keys) });
   } catch (e) {
     if (e instanceof HttpError) return c.json({ error: e.message }, e.status as 400 | 404 | 500);
     console.error(e);

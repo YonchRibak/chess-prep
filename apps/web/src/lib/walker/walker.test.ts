@@ -44,6 +44,7 @@ function move(
     isMainLine: false,
     priority: 0,
     isDropped: false,
+    lineTags: [],
     ...partial,
   } as RepertoireMove;
 }
@@ -201,6 +202,53 @@ describe('walker.findNextBuildNode exclude (skip-for-now)', () => {
     // Excluding both → nothing left.
     const done = findNextBuildNode(rep, indices, { exclude: new Set(['p4a', 'p4b']) });
     expect(done).toBeNull();
+  });
+});
+
+describe('walker.findNextBuildNode scope (Phase 9a)', () => {
+  /** e4 branch tagged "vs-danny"; c5 branch untagged. Both need prep. */
+  function twoBranchRep(): RepertoireFull {
+    return {
+      ...emptyRep('white'),
+      positions: [
+        { id: 'p0', fenKey: ROOT_KEY, fullFen: ROOT_FEN },
+        { id: 'p1', fenKey: 'k1', fullFen: 'pos b - - 0 1' },
+        { id: 'p2', fenKey: 'k2', fullFen: 'pos b - - 0 1' },
+        { id: 'p3', fenKey: 'k3', fullFen: 'pos w - - 0 2' },
+        { id: 'p4', fenKey: 'k4', fullFen: 'pos w - - 0 2' },
+      ],
+      moves: [
+        move({ id: 'm1', parentPositionId: 'p0', childPositionId: 'p1', san: 'e4', lineTags: ['vs-danny'] }),
+        move({ id: 'm2', parentPositionId: 'p0', childPositionId: 'p2', san: 'd4' }),
+        move({ id: 'm3', parentPositionId: 'p1', childPositionId: 'p3', san: 'e5', lineTags: ['vs-danny'] }),
+        move({ id: 'm4', parentPositionId: 'p2', childPositionId: 'p4', san: 'd5' }),
+      ],
+    };
+  }
+
+  it('only offers build nodes inside the scoped line', () => {
+    const rep = twoBranchRep();
+    const indices = buildIndices(rep);
+    const node = findNextBuildNode(rep, indices, {
+      scope: { kind: 'tag', value: 'vs-danny' },
+    });
+    expect(node!.position.id).toBe('p3');
+  });
+
+  it("scope 'all' still sees both branches", () => {
+    const rep = twoBranchRep();
+    const indices = buildIndices(rep);
+    const node = findNextBuildNode(rep, indices, { scope: { kind: 'all' } });
+    expect(['p3', 'p4']).toContain(node!.position.id);
+  });
+
+  it('returns null when the scoped line is fully covered rather than escaping it', () => {
+    const rep = twoBranchRep();
+    const indices = buildIndices(rep);
+    const node = findNextBuildNode(rep, indices, {
+      scope: { kind: 'tag', value: 'no-such-tag' },
+    });
+    expect(node).toBeNull();
   });
 });
 

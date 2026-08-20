@@ -36,13 +36,44 @@ Per-repertoire, stored as partial jsonb, always read through `mergeDrillRules()`
 | `branching` | `'all'` | `'all'` or `'main_line_only'` (only `isMainLine` moves) |
 | `blindfold` | `false` | Hide pieces; show the move list only |
 | `evalAfterAnswer` | `false` | Reveal engine eval after grading |
+| `scope` | `{ kind: 'all' }` | Phase 9a line scope — see below. Composes with the rules above |
+
+## Line scopes (Phase 9a)
+
+"Drill only the Advance Variation" is a **predicate evaluated at queue-build time**, not
+a stored copy of a line — a copy would drift from the tree it was cut from, silently.
+Logic lives in [packages/shared/src/scope.ts](../../packages/shared/src/scope.ts) with
+[tests](../../packages/shared/src/scope.test.ts):
+
+| `scope.kind` | Matches on | Authoring cost |
+|---|---|---|
+| `all` (default) | everything | — |
+| `openingName` | the **deepest ECO name along the card's path**, boundary-matched so `Caro-Kann Defense` catches all its variations but not an unrelated `…Deferred` | zero — the book already names it |
+| `tag` | the move's `line_tags` | one tag at one branch point, in the editor's Move panel |
+
+Honored by `buildDrillQueue`, `buildDailyDietQueue` (so a scoped repertoire contributes
+only its scoped cards to the daily diet), and the walker's build seed
+([walker](walker.md#scoped-building)) — a scope change must be applied to all
+[three drill implementations](#three-drill-implementations-known-debt).
+
+**Names come from a local cache, and a cold cache fails closed.** Scope filtering runs
+inside the synchronous queue builders and must behave identically offline, so names are
+resolved from a `fenKey → OpeningId` map cached in IndexedDB
+([lib/openings/nameCache.ts](../../apps/web/src/lib/openings/nameCache.ts), warmed via
+`POST /openings/by-fens`), not per-card HTTP lookups. An `openingName` scope built with
+no lookup yields an **empty** queue rather than an unfiltered one: a "scoped" session
+that quietly widened to the whole tree is indistinguishable from a correct one until the
+user notices they're drilling the wrong opening.
+
+A tag scope needs no network at all.
 
 ## Queue building
 
 [apps/web/src/lib/drill/queue.ts](../../apps/web/src/lib/drill/queue.ts) ·
 [tests](../../apps/web/src/lib/drill/queue.test.ts)
 
-`buildDrillQueue({ repertoire, cards, mode, rules, now?, rng? })` → `DrillItem[]`.
+`buildDrillQueue({ repertoire, cards, mode, rules, now?, rng?, openingLookup? })` →
+`DrillItem[]`.
 Each item carries the `card`, the `move`, its `parentPosition`, `depth`, and optionally
 `opponentResponseSan`. `now` and `rng` are injected so tests are deterministic.
 

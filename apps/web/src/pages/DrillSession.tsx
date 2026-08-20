@@ -10,6 +10,7 @@ import { Board } from '../components/Board.tsx';
 import { Btn, Card } from '../components/ui.tsx';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { getAllCardsLocal } from '../lib/idb/schema.ts';
+import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import { gradeAndQueue } from '../lib/srs/sync.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import type { BoardColor } from '../lib/chess/useBoard.ts';
@@ -78,11 +79,16 @@ export function DrillSession() {
       const cards = await getAllCardsLocal();
       if (cancelled) return;
       const drillRules = mergeDrillRules(active.drillRules);
+      // Phase 9a: the same name cache the setup screen previewed with, so the
+      // session's queue matches the count the user saw before starting.
+      const names = await ensureOpeningNames([active]);
+      if (cancelled) return;
       const q = buildDrillQueue({
         repertoire: active,
         cards,
         mode: modeRef.current,
         rules: drillRules,
+        openingLookup: openingNameLookup(names),
       });
       if (cancelled) return;
       setQueue(q);

@@ -44,8 +44,13 @@ Everything inside one `db.transaction`:
    child positions.
 4. Find-or-create the child `Position` (`uniq_repertoire_fen` makes transpositions reuse
    the existing node), tracking `childPositionCreated`.
-5. Insert the `Move`.
+5. Insert the `Move`, with `line_tags` inherited from the edge into the parent
+   (`parentEdgeTags` → `inheritLineTags`) unless the body supplied its own.
 6. If `isUserMove(fenTurn(parent.fullFen), rep.color)`, create the SRS card.
+
+A position can have several incoming edges (transpositions collapse to one node), so
+`parentEdgeTags` picks deterministically — main line, then priority, then SAN. An
+arbitrary pick would make the same build action produce different tags run to run.
 
 ### `appendLine`
 
@@ -54,6 +59,17 @@ Walks a SAN sequence from `fromFenKey` in a single transaction, via the internal
 not duplicated — so re-running the Phase 6 "Add to my repertoire" flow reports
 `added: 0, reused: N`. New SRS cards are created for newly-inserted user-turn moves.
 Bumps `repertoires.updatedAt` only when something was actually added.
+
+Tags are threaded down the walk: each new move inherits from the move above it, and a
+**reused** edge contributes *its own* tags to what follows — so appending through an
+existing tagged branch keeps that branch's tags rather than the caller's starting point.
+
+### `patchMove` and retagging
+
+Setting `lineTags` cascades the new set over the move's whole subtree (`retagSubtree`,
+which walks dropped edges too, since a dropped branch can be restored later). Retagging
+re-roots inheritance, and without the cascade tagging a branch point would tag exactly
+one move — a tag-scoped session would then drill that single card and look finished.
 
 ### The one-prep invariant
 
@@ -74,7 +90,9 @@ position. Keep it passing.
 
 Read-only queries over `opening_book_entries`:
 `listOpenings({ q, eco, limit })`, `getOpeningByFenKey`, `getBookContinuations`,
-`identifyDeepestOpeningFromPath`, and `validateAndNormalizeFenKey` (the guard that keeps
+`identifyDeepestOpeningFromPath`, `lookupOpeningsByFenKeys` (Phase 9a bulk map, no path
+walk — it feeds the client's offline name cache),
+and `validateAndNormalizeFenKey` (the guard that keeps
 path params from being re-parsed inconsistently). Matching logic itself is shared with
 the client — see [opening-database](../03-domain/opening-database.md).
 

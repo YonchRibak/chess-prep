@@ -1,13 +1,16 @@
 import {
   fenTurn,
   isUserMove,
+  matchesLineScope,
   mergeDrillRules,
   type Color,
   type DrillMode,
   type DrillRules,
+  type OpeningId,
   type SrsCardDto,
 } from '@chess-prep/shared';
 import type { RepertoireFull, RepertoireMove, RepertoirePosition } from '../../api/client.ts';
+import { buildDeepestOpeningIndex } from '../openings/pathNames.ts';
 
 export interface DrillItem {
   card: SrsCardDto;
@@ -33,6 +36,17 @@ export interface BuildQueueArgs {
   now?: Date;
   /** RNG for the 'random' mode; defaults to Math.random. */
   rng?: () => number;
+  /**
+   * Phase 9a: `fenKey → OpeningId` for deriving each card's opening name, used
+   * only by `rules.scope.kind === 'openingName'`. Callers get one from
+   * [lib/openings/nameCache.ts](../openings/nameCache.ts).
+   *
+   * Omitting it while an opening-name scope is active yields an EMPTY queue,
+   * not an unfiltered one — a scoped session that silently widens to the whole
+   * tree is indistinguishable from a correct one until the user notices they're
+   * drilling the wrong opening.
+   */
+  openingLookup?: (fenKey: string) => OpeningId | null;
 }
 
 /**
@@ -40,8 +54,23 @@ export interface BuildQueueArgs {
  * The result is the ordered list of items to present to the user.
  */
 export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
-  const { repertoire, cards, mode, rules: rulesIn, now = new Date(), rng = Math.random } = args;
+  const {
+    repertoire,
+    cards,
+    mode,
+    rules: rulesIn,
+    now = new Date(),
+    rng = Math.random,
+    openingLookup,
+  } = args;
   const rules = mergeDrillRules(rulesIn);
+  const scope = rules.scope;
+  // The name index is only built when a name scope is active — it's a full BFS
+  // and every other scope kind ignores it.
+  const deepestByPositionId =
+    scope.kind === 'openingName'
+      ? buildDeepestOpeningIndex(repertoire, openingLookup ?? (() => null))
+      : null;
 
   // Index lookups.
   const cardByMoveId = new Map(cards.map((c) => [c.moveId, c]));
@@ -82,6 +111,18 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
     if (rules.minDepth && depth < rules.minDepth) continue;
     if (rules.maxDepth && rules.maxDepth > 0 && depth > rules.maxDepth) continue;
     if (rules.branching === 'main_line_only' && !m.isMainLine) continue;
+
+    // Phase 9a scope. The name is taken at the move's CHILD position — the
+    // card belongs to the line it creates, so a move that first enters the
+    // Advance Variation is in scope for "…Advance Variation".
+    if (
+      !matchesLineScope(scope, {
+        deepestOpening: deepestByPositionId?.get(m.childPositionId) ?? null,
+        lineTags: m.lineTags ?? [],
+      })
+    ) {
+      continue;
+    }
 
     items.push({ card, move: m, parentPosition: parent, depth });
   }
@@ -130,11 +171,19 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
         const next = out[0];
         if (!next) break;
         const item = items.find((it) => it.move.id === next.id);
+        const parent = positionById.get(next.parentPositionId);
+        // Whether this ply is the user's is a property of the position, NOT of
+        // membership in `items` — a user move can be missing from `items`
+        // because a rule (depth, branching, scope) filtered it out, and
+        // mistaking it for an opponent reply would auto-play the user's own
+        // move onto the board.
+        const isUserPly = parent
+          ? isUserMove(fenTurn(parent.fullFen), repertoire.color as Color)
+          : false;
         if (item) {
-          // This is a user-side move (items only contains user-side moves).
           path.push(item);
           lastUserItem = item;
-        } else if (lastUserItem && lastUserItem.opponentResponseSan === undefined) {
+        } else if (!isUserPly && lastUserItem && lastUserItem.opponentResponseSan === undefined) {
           // First opponent move after the last user card — wire it as the
           // auto-play response so the board flows into the next card.
           lastUserItem.opponentResponseSan = next.san;
@@ -176,6 +225,12 @@ export interface BuildDailyDietArgs {
    * 24h before `now`.
    */
   dailyResetAt?: Date;
+  /**
+   * Phase 9a: needed only if some repertoire's rules carry an opening-name
+   * scope — per-repertoire scopes are honored here too, so a scoped repertoire
+   * contributes only its scoped cards to the daily diet.
+   */
+  openingLookup?: (fenKey: string) => OpeningId | null;
 }
 
 /**
@@ -196,6 +251,7 @@ export function buildDailyDietQueue(args: BuildDailyDietArgs): DailyDietItem[] {
     newCardsPerDay = 20,
     now = new Date(),
     dailyResetAt = new Date(now.getTime() - 24 * 60 * 60 * 1000),
+    openingLookup,
   } = args;
 
   // Per-repertoire "due" queues, each already filtered by the per-rep drill rules.
@@ -208,6 +264,7 @@ export function buildDailyDietQueue(args: BuildDailyDietArgs): DailyDietItem[] {
       mode: 'due',
       rules: rep.drillRules,
       now,
+      openingLookup,
     });
     perRep.push(
       items.map<DailyDietItem>((it) => ({

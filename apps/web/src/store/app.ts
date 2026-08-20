@@ -53,6 +53,8 @@ interface AppStore {
   setComment(moveId: string, comment: string | null): Promise<void>;
   setAnnotation(moveId: string, annotation: string | null): Promise<void>;
   setMainLine(moveId: string, isMainLine: boolean): Promise<void>;
+  /** Phase 9a: retag a branch. The server cascades the tags down the subtree. */
+  setLineTags(moveId: string, lineTags: string[]): Promise<void>;
   setPriority(moveId: string, priority: number): Promise<void>;
   deleteMove(moveId: string): Promise<void>;
 
@@ -184,6 +186,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const active = get().active;
     if (!active) return;
     await api.patchMove(active.id, moveId, { annotation });
+    await get().reloadActive();
+  },
+
+  async setLineTags(moveId, lineTags) {
+    const active = get().active;
+    if (!active) return;
+    await api.patchMove(active.id, moveId, { lineTags });
     await get().reloadActive();
   },
 

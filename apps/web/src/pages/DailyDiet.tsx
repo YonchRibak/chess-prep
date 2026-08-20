@@ -30,6 +30,7 @@ import { OpeningHeader } from '../components/OpeningHeader.tsx';
 import { MoveLine } from '../components/MoveLine.tsx';
 import { api, type RepertoireFull, type UserSettings } from '../api/client.ts';
 import { getAllCardsLocal, putRepertoireLocal } from '../lib/idb/schema.ts';
+import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import { gradeAndQueue } from '../lib/srs/sync.ts';
 import { buildDailyDietQueue, type DailyDietItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
@@ -142,11 +143,15 @@ export function DailyDiet() {
     }
     const cards = await getAllCardsLocal();
     const newCap = settings?.newCardsPerDay ?? 20;
+    // Phase 9a: per-repertoire line scopes apply to the diet too, so a scoped
+    // repertoire contributes only its scoped cards.
+    const names = await ensureOpeningNames(fulls);
     const q = buildDailyDietQueue({
       repertoires: fulls,
       cards,
       newCardsPerDay: newCap,
       dailyResetAt: settings ? new Date(settings.dailyDietLastResetAt) : undefined,
+      openingLookup: openingNameLookup(names),
     });
 
     setQueue(q);

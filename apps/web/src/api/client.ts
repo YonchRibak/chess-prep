@@ -40,6 +40,8 @@ export interface RepertoireMove {
   priority: number;
   /** Phase 7: walker skips dropped moves and their subtrees. */
   isDropped: boolean;
+  /** Phase 9a: explicit line membership, inherited from the parent edge on insert. */
+  lineTags: string[];
 }
 
 export interface RepertoireFull extends RepertoireSummary {
@@ -60,6 +62,7 @@ export interface AddedMove {
   isMainLine: boolean;
   priority: number;
   isDropped: boolean;
+  lineTags: string[];
   childPositionCreated: boolean;
 }
 
@@ -174,6 +177,11 @@ export const api = {
       priority?: number;
       /** Phase 7: mark/unmark a branch as "won't cover" — walker skips dropped moves. */
       isDropped?: boolean;
+      /**
+       * Phase 9a: retag this edge. Cascades down the subtree server-side,
+       * because retagging re-roots inheritance.
+       */
+      lineTags?: string[];
     },
   ): Promise<void> {
     return request(`/repertoires/${repertoireId}/moves/${moveId}`, {
@@ -247,6 +255,17 @@ export const api = {
         throw e;
       },
     );
+  },
+
+  /**
+   * Phase 9a: bulk name lookup for a whole repertoire, cached client-side so
+   * opening-name scope filtering keeps working offline.
+   */
+  lookupOpeningsByFenKeys(fenKeys: string[]): Promise<{ openings: Record<string, OpeningId> }> {
+    return request('/openings/by-fens', {
+      method: 'POST',
+      body: JSON.stringify({ fenKeys }),
+    });
   },
 
   identifyDeepestOpening(fenKeys: string[]): Promise<{ opening: OpeningId | null }> {

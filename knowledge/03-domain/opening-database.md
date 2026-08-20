@@ -63,6 +63,17 @@ Both use an 80 ms debounce and a **process-wide in-memory cache**.
 [useBookContinuations.ts](../../apps/web/src/lib/openings/useBookContinuations.ts)
 fetches suggestions for build prompts.
 
+Two non-hook helpers exist for Phase 9a
+[line scopes](srs-drilling.md#line-scopes-phase-9a), which need names *synchronously and
+offline* and therefore cannot use the hooks:
+- [nameCache.ts](../../apps/web/src/lib/openings/nameCache.ts) — bulk-fetches the names
+  for a repertoire's positions (`POST /openings/by-fens`) into IndexedDB, and returns
+  whatever is cached when the network fails.
+- [pathNames.ts](../../apps/web/src/lib/openings/pathNames.ts) — one BFS per tree that
+  gives every position its deepest name, replacing per-node lookups. It follows dropped
+  edges too: naming answers "where am I in theory", which doesn't change because the user
+  declined to prep a branch.
+
 ## Auto-naming UI
 
 [components/OpeningHeader.tsx](../../apps/web/src/components/OpeningHeader.tsx) wraps

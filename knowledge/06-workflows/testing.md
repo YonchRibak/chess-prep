@@ -11,12 +11,13 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [fen.test.ts](../../packages/shared/src/fen.test.ts) | `fenKey()` normalization |
 | [openings.test.ts](../../packages/shared/src/openings.test.ts) | Importer/lookup normalization parity (pure-logic half) |
 | [pgn.test.ts](../../packages/shared/src/pgn.test.ts) | PGN round-trip: variations, NAGs, comments |
+| [scope.test.ts](../../packages/shared/src/scope.test.ts) | Phase 9a: opening-name boundary matching, tag matching, tag inheritance (replace vs inherit vs clear), `parseLineScope` validation, and that a malformed scope degrades to "no filter" rather than "no cards" |
 
 ### apps/web — pure logic, no DOM
 | File | Guards |
 |---|---|
-| [walker.test.ts](../../apps/web/src/lib/walker/walker.test.ts) | BFS round-robin order, dropped-subtree skipping, coverage stats |
-| [queue.test.ts](../../apps/web/src/lib/drill/queue.test.ts) | Drill queue per mode + rules; daily-diet interleaving and the new-card cap |
+| [walker.test.ts](../../apps/web/src/lib/walker/walker.test.ts) | BFS round-robin order, dropped-subtree skipping, coverage stats; scoped building stays inside its line and returns `null` rather than escaping it |
+| [queue.test.ts](../../apps/web/src/lib/drill/queue.test.ts) | Drill queue per mode + rules; daily-diet interleaving and the new-card cap; line scopes — including that an `openingName` scope with **no** name lookup yields an empty queue (fail closed), and that a rule-filtered *user* move is never auto-played as an opponent reply in walkthrough |
 | [scheduler.test.ts](../../apps/web/src/lib/srs/scheduler.test.ts) | FSRS DTO ↔ card conversion and grading |
 | [engine.test.ts](../../apps/web/src/lib/engine/engine.test.ts) | UCI parsing, and **`setGated`** |
 | [arrows.test.ts](../../apps/web/src/lib/engine/arrows.test.ts) | Rank → brush/color mapping |

@@ -114,6 +114,35 @@ export async function identifyDeepestOpeningFromPath(
 }
 
 /**
+ * Phase 9a: bulk `fenKey → OpeningId` lookup for a whole repertoire in one
+ * round trip.
+ *
+ * Scope filtering runs inside the queue builders, which are synchronous and
+ * must work offline — so the client caches this map rather than doing a lookup
+ * per card. Keys with no book entry are simply absent from the result.
+ */
+export async function lookupOpeningsByFenKeys(
+  fenKeys: readonly string[],
+): Promise<Record<string, OpeningId>> {
+  if (fenKeys.length === 0) return {};
+  const rows = await db
+    .select({
+      eco: openingBookEntries.eco,
+      name: openingBookEntries.name,
+      variation: openingBookEntries.variation,
+      fenKey: openingBookEntries.fenKey,
+    })
+    .from(openingBookEntries)
+    .where(inArray(openingBookEntries.fenKey, fenKeys as string[]));
+
+  const out: Record<string, OpeningId> = {};
+  for (const r of rows) {
+    out[r.fenKey] = { eco: r.eco, name: r.name, variation: r.variation };
+  }
+  return out;
+}
+
+/**
  * Phase 7 guided builder: given any position in the book's reach, return the
  * set of known book moves out of it, each with the opening identity of the
  * position it leads to (if that child is itself a named entry).

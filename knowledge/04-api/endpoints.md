@@ -34,9 +34,9 @@ validation error from the service rather than a crash.
 | `GET /repertoires/:id` | — | `RepertoireFull` (summary + positions + moves) |
 | `PATCH /repertoires/:id` | `{ name?, tags? }` | summary |
 | `DELETE /repertoires/:id` | — | `204` |
-| `POST /repertoires/:id/moves` | `{ parentFenKey, san, isMainLine?, onConflict? }` | `201 AddedMove` |
-| `POST /repertoires/:id/moves/batch` | `{ fromFenKey, sans[], onConflict? }` | `201 { added, reused, ... }` |
-| `PATCH /repertoires/:id/moves/:moveId` | `{ comment?, annotation?, isMainLine?, priority?, isDropped? }` | `204` |
+| `POST /repertoires/:id/moves` | `{ parentFenKey, san, isMainLine?, onConflict?, lineTags? }` | `201 AddedMove` |
+| `POST /repertoires/:id/moves/batch` | `{ fromFenKey, sans[], onConflict?, lineTags? }` | `201 { added, reused, ... }` |
+| `PATCH /repertoires/:id/moves/:moveId` | `{ comment?, annotation?, isMainLine?, priority?, isDropped?, lineTags? }` | `204` |
 | `DELETE /repertoires/:id/moves/:moveId` | — | `204` |
 | `POST /repertoires/import` | `{ name, color, pgn, tags? }` | `201` |
 | `PATCH /repertoires/:id/drill-rules` | partial `DrillRules` | updated rules |
@@ -46,6 +46,12 @@ validation error from the service rather than a crash.
 [one-prep-per-user-position invariant](../02-architecture/data-model.md#invariants-that-are-not-database-constraints).
 `'refuse'` (the default path) yields **409**, which the walker UI turns into an inline
 swap confirmation.
+
+`lineTags` (Phase 9a) is optional on every write path. **Omitting it means "inherit from
+the parent edge"; sending `[]` means "clear inheritance here"** — the two are not the
+same. On `PATCH`, the tags cascade down the move's subtree, because retagging re-roots
+inheritance. `PATCH /drill-rules` validates `scope` via `parseLineScope` and `400`s on a
+malformed one; the rest of the rules body stays opaque jsonb.
 
 ## `/openings`
 
@@ -57,6 +63,7 @@ swap confirmation.
 | `GET /openings/by-fen/:fenKey` | `404` when unknown. Encode slashes as `%2F`; the key contains spaces and slashes, both of which round-trip cleanly. Validated by `validateAndNormalizeFenKey` |
 | `GET /openings/continuations/:fenKey` | Known named moves from this position |
 | `POST /openings/identify-deepest` | `{ fenKeys: string[] }` — path-walk in one round trip; rejects non-array or non-string entries with `400` |
+| `POST /openings/by-fens` | `{ fenKeys: string[] }` → `{ openings: Record<fenKey, OpeningId> }`. Bulk lookup with **no** path walk — unknown keys are simply absent. Feeds the client's offline name cache for [line scopes](../03-domain/srs-drilling.md#line-scopes-phase-9a) |
 
 ## `/srs`
 

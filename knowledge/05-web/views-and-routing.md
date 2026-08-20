@@ -33,7 +33,7 @@ Adding a view means touching four places: the union, `viewToHash`, `hashToView`,
 | `list` | [RepertoireList.tsx](../../apps/web/src/pages/RepertoireList.tsx) |
 | `browse` | [BrowseOpenings.tsx](../../apps/web/src/pages/BrowseOpenings.tsx) |
 | `editor` | [RepertoireEditor.tsx](../../apps/web/src/pages/RepertoireEditor.tsx) |
-| `drill-setup` | [DrillSetup.tsx](../../apps/web/src/pages/DrillSetup.tsx) |
+| `drill-setup` | [DrillSetup.tsx](../../apps/web/src/pages/DrillSetup.tsx) — mode, rules, and the Phase 9a **Line** picker; the live queue-length preview builds the real queue, so a scope that matches nothing shows `0` before the user starts |
 | `drill-session` | [DrillSession.tsx](../../apps/web/src/pages/DrillSession.tsx) (classic) |
 | `walker-session` | [WalkerSession.tsx](../../apps/web/src/pages/WalkerSession.tsx) |
 | `daily` | [DailyDiet.tsx](../../apps/web/src/pages/DailyDiet.tsx) |

@@ -5,6 +5,8 @@
  * sync storage. Both sides serialize cards in this shape over the wire.
  */
 
+import { ALL_LINES, type LineScope } from './scope.js';
+
 export type FsrsState = 0 | 1 | 2 | 3; // new | learning | review | relearning
 
 export const FsrsState = {
@@ -53,6 +55,12 @@ export interface DrillRules {
   blindfold?: boolean;
   /** Show engine evaluation after the user answers (depends on Phase 4 engine). */
   evalAfterAnswer?: boolean;
+  /**
+   * Phase 9a: restrict the session to one line of the tree — by deepest ECO
+   * name or by an explicit `lineTags` tag. Composes with (does not replace)
+   * the depth and branching rules above. See scope.ts.
+   */
+  scope?: LineScope;
 }
 
 export const DEFAULT_DRILL_RULES: Required<DrillRules> = {
@@ -61,6 +69,7 @@ export const DEFAULT_DRILL_RULES: Required<DrillRules> = {
   branching: 'all',
   blindfold: false,
   evalAfterAnswer: false,
+  scope: ALL_LINES,
 };
 
 export function mergeDrillRules(rules: DrillRules | undefined | null): Required<DrillRules> {
