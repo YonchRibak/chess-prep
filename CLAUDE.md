@@ -2,6 +2,86 @@
 
 Guidance for Claude Code when working in this repository.
 
+## Vision
+
+A web-first PWA for chess opening preparation, built by and for a single competitive
+player who is also a fullstack dev — a more customizable replacement for Lotus Chess,
+grounded in real opening theory. It does three things:
+
+1. **Build a repertoire** on top of a bundled named-opening (ECO) database.
+2. **Drill it** flashcard-style with FSRS spaced repetition, fully offline.
+3. **Analyze** with Stockfish — everywhere *except* inside an unanswered flashcard.
+
+The atomic unit is a **prepared move**: a parent position (normalized FEN) plus the
+single move the user intends to play there. Build and Drill are not separate UIs — they
+are two *seeds* into one **walker** over a position-keyed tree. See
+[product.md](knowledge/01-overview/product.md) and [walker.md](knowledge/03-domain/walker.md).
+
+**Non-negotiable qualities** — don't regress these:
+- **Offline drilling.** The backend is a sync/backup target, never the source of truth
+  for a live drill session.
+- **No lock-in.** Round-trip-faithful PGN import *and* export.
+- **Deep customizability.** Per-repertoire drill rules; a daily mixed-side session.
+- **The engine never leaks a card's answer.**
+
+## Technical stack
+
+Monorepo: **pnpm workspaces** + TypeScript project references, Node ≥ 20, pnpm ≥ 10.
+
+| Area | Choice |
+|---|---|
+| Web (`apps/web`) | React 18, Vite 6, Zustand, Tailwind, `vite-plugin-pwa` |
+| Board / rules / engine | Chessground (render), chess.js (rules), stockfish.wasm (eval) |
+| Scheduling | `ts-fsrs`, run **client-side** |
+| Offline store | IndexedDB via `idb` |
+| API (`apps/api`) | Hono on `@hono/node-server`, Drizzle ORM, Postgres (docker-compose) |
+| Shared (`packages/shared`) | Types, `fenKey()`, opening ID, drill + PGN logic — the client/server contract |
+| Tooling | Vitest, ESLint 9 + typescript-eslint (web), `tsx`, drizzle-kit |
+
+Root scripts: `pnpm dev` / `dev:web` / `dev:api`, `build`, `test`, `lint`, `typecheck`,
+`db:up`, `db:migrate`, `db:generate`, `db:studio`. Details in
+[dev-setup.md](knowledge/06-workflows/dev-setup.md) and
+[monorepo.md](knowledge/02-architecture/monorepo.md).
+
+## Git guidelines
+
+- **Always branch out.** Never commit work directly to `main` — create a
+  descriptive branch (`feat/…`, `fix/…`, `docs/…`) before making changes.
+- **Never merge or push to `main` without explicit permission.** Ask first, every time.
+  This includes fast-forwards, rebases onto `main`, and force-pushes.
+- Commit in coherent units, with a message saying *why*, not just what.
+- A change and the knowledge-base update it requires belong in the **same commit**.
+- Don't skip hooks (`--no-verify`) or bypass signing unless asked.
+
+## Code conventions
+
+- **Separation of concerns is the load-bearing rule.** Chessground draws and knows no
+  rules; chess.js validates and draws nothing; Stockfish only evaluates; the opening DB
+  only identifies. Each is wrapped in its own module/hook (`useBoard`, `useChessRules`,
+  `useEngine`, `useOpeningId`) — components compose those wrappers and never reach past
+  them. Full table in
+  [separation-of-concerns.md](knowledge/02-architecture/separation-of-concerns.md).
+- **Layer discipline:** shared logic that both sides must agree on lives in
+  `packages/shared`; HTTP handlers stay thin and delegate to the services layer;
+  React components stay presentational, with state in the Zustand store and side effects
+  in hooks.
+- **Never parse or normalize a FEN by hand** outside
+  [fen.ts](packages/shared/src/fen.ts).
+- **Types are a contract, not a feature flag.** A type in
+  `packages/shared/src/types.ts` may describe something not wired up — verify before
+  assuming.
+- **Comments explain *why*.** Match the surrounding density; document invariants and the
+  failure mode a rule prevents, especially where a violation fails *silently*. Skip
+  comments that restate the code.
+- **Tests:** Vitest everywhere. Cover domain logic (walker, FSRS, fen keying, PGN
+  round-trip) and any invariant that isn't enforced by the type system or the DB. Record
+  a new test's purpose in [testing.md](knowledge/06-workflows/testing.md).
+- **Before finishing:** `pnpm typecheck`, `pnpm lint`, `pnpm test` must pass. Report
+  failures honestly rather than working around them.
+- Prefer small, focused modules and explicit names over cleverness. Follow the existing
+  idiom of the file you're in; see
+  [conventions.md](knowledge/06-workflows/conventions.md) for stack-specific gotchas.
+
 ## Start here
 
 Read [knowledge/README.md](knowledge/README.md) before non-trivial work — it indexes
