@@ -14,7 +14,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
-    "db:import-openings": "tsx src/scripts/import-openings.ts"
+    "db:import-openings": "tsx src/scripts/import-openings.ts",
+    "probe:explorer": "tsx src/scripts/probe-explorer.ts"
   },
   "dependencies": {
     "@chess-prep/shared": "workspace:*",

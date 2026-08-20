@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { STARTING_FEN_KEY } from '@chess-prep/shared';
 import { env } from './env.js';
+import { explorerRoutes } from './routes/explorer.js';
 import { openingRoutes } from './routes/openings.js';
 import { repertoireRoutes } from './routes/repertoires.js';
 import { srsRoutes } from './routes/srs.js';
@@ -27,6 +28,7 @@ app.get('/health', (c) =>
   }),
 );
 
+app.route('/explorer', explorerRoutes);
 app.route('/openings', openingRoutes);
 app.route('/repertoires', repertoireRoutes);
 app.route('/srs', srsRoutes);

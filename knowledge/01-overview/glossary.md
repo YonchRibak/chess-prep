@@ -23,14 +23,16 @@ Terms used consistently across code, spec, and these docs.
 | **Classic drill** | The pre-walker Phase 3 drill UI ([DrillSession.tsx](../../apps/web/src/pages/DrillSession.tsx)). Still reachable; slated for merge into the walker. |
 | **Ply** | A single half-move. Depths throughout the code are in plies from the repertoire root. |
 
-## Phase 9a terms — built
+## Phase 9a/9b terms — built
 
 | Term | Meaning |
 |---|---|
+| **Explorer** | Lichess opening-explorer statistics — how often a move is played and how it scores. Cached in `explorer_entries`; answers *which opponent replies matter*, never *which move the user should play*. [explorer](../03-domain/explorer.md) |
+| **Share** | A move's fraction of the games played at a position, 0..1. The ranking key for opponent replies. |
 | **Scope** | A predicate selecting a subset of a repertoire for a session — *derived* from the ECO deepest name, or *explicit* via `line_tags`. A line is a scope, never a copied tree. `DrillRules.scope`; see [srs-drilling](../03-domain/srs-drilling.md#line-scopes-phase-9a). |
 | **Line tag** | A label on a `Move`, inherited from the parent edge at insert time, for what the book can't express (`vs-danny`, `blitz-only`). Column `moves.line_tags`. |
 
-## Phase 9b–9d terms — designed, not built
+## Phase 9c–9d terms — designed, not built
 
 These appear in [repertoire-growth](../03-domain/repertoire-growth.md) only. No code uses
 them yet; don't assume a symbol exists because a term does.

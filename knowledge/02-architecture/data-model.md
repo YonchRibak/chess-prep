@@ -2,7 +2,7 @@
 
 Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
-`0003_drop_branch`, `0004_user_settings`, `0005_line_tags`.
+`0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -62,6 +62,14 @@ One card per prep move. Stores raw FSRS state — `due`, `stability`, `difficult
 Read-only ECO reference: `eco`, `name`, `variation`, `fen_key` (unique), `full_fen`,
 `pgn_moves`. Dropped and reloaded wholesale by the importer. User actions never mutate
 it. See [opening-database](../03-domain/opening-database.md).
+
+### `explorer_entries`
+Phase 9b cache of opening-explorer statistics: `fen_key`, `source`, `total`,
+`moves` (jsonb), `fetched_at`, unique on `(fen_key, source)`. **A cache, never a source of
+truth — safe to truncate**, and every reader must work with it cold. `source` includes the
+dataset's filters (`lichess:blitz,rapid,classical:1600`) because the same position has
+different statistics per rating band and time control. Full rationale in
+[explorer](../03-domain/explorer.md).
 
 ### `user_settings`
 One row per user: `new_cards_per_day` (default 20), `daily_diet_last_reset_at`,

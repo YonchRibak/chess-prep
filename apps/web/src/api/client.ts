@@ -1,4 +1,4 @@
-import type { Color, DrillRules, OpeningId } from '@chess-prep/shared';
+import type { Color, DrillRules, ExplorerEntry, OpeningId } from '@chess-prep/shared';
 
 export interface BookContinuation {
   san: string;
@@ -282,6 +282,21 @@ export const api = {
    */
   getBookContinuations(fenKey: string): Promise<BookContinuation[]> {
     return request(`/openings/continuations/${encodeURIComponent(fenKey)}`);
+  },
+
+  /* ---------------- opening explorer (Phase 9b) ---------------- */
+
+  /**
+   * Explorer statistics for a position, read through the server's cache.
+   * `entry` is `null` when nothing is cached and lichess is unreachable — that
+   * is a normal outcome, not an error: fall back to book continuations.
+   */
+  getExplorerEntry(
+    fenKey: string,
+    opts: { cachedOnly?: boolean } = {},
+  ): Promise<{ entry: ExplorerEntry | null; source: string; backoffMs: number }> {
+    const qs = opts.cachedOnly ? '?cachedOnly=1' : '';
+    return request(`/explorer/${encodeURIComponent(fenKey)}${qs}`);
   },
 
   /* ---------------- user settings (Phase 8a) ---------------- */

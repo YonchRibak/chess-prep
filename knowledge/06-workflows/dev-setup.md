@@ -36,6 +36,20 @@ export NODE_EXTRA_CA_CERTS=/c/code/chess-prep/.corp-ca.pem   # bash
 $env:NODE_EXTRA_CA_CERTS = "C:\code\chess-prep\.corp-ca.pem" # PowerShell
 ```
 
+## Opening explorer reachability (Phase 9b)
+
+`explorer.lichess.ovh` returns **401 from an nginx** on this machine for every request,
+regardless of headers, while `lichess.org` itself answers normally — so the explorer cache
+never fills here. That is a *supported* degraded state (candidate selection falls back to
+the ECO book), but it is worth knowing before debugging empty candidate lists.
+
+```bash
+pnpm --filter @chess-prep/api probe:explorer     # prints the entry, or NULL
+```
+
+The service never throws and logs only a warning, so the probe is how you tell "no data"
+from "broken". See [explorer](../03-domain/explorer.md).
+
 ## Everyday commands
 
 | Command | Effect |

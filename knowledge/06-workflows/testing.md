@@ -11,6 +11,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [fen.test.ts](../../packages/shared/src/fen.test.ts) | `fenKey()` normalization |
 | [openings.test.ts](../../packages/shared/src/openings.test.ts) | Importer/lookup normalization parity (pure-logic half) |
 | [pgn.test.ts](../../packages/shared/src/pgn.test.ts) | PGN round-trip: variations, NAGs, comments |
+| [explorer.test.ts](../../packages/shared/src/explorer.test.ts) | Phase 9b candidate policy: frequency cutoffs and the reply cap (what stops auto-expansion exploding the frontier), that a popular move the engine dislikes is never promoted, that no explorer data degrades to plain engine order, and that thin samples score `null` rather than 100% |
 | [scope.test.ts](../../packages/shared/src/scope.test.ts) | Phase 9a: opening-name boundary matching, tag matching, tag inheritance (replace vs inherit vs clear), `parseLineScope` validation, and that a malformed scope degrades to "no filter" rather than "no cards" |
 
 ### apps/web — pure logic, no DOM
@@ -28,6 +29,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 |---|---|
 | [repertoires.invariant.test.ts](../../apps/api/src/services/repertoires.invariant.test.ts) | One-prep-per-user-turn-position, including the `swap` path |
 | [import-openings.parity.test.ts](../../apps/api/src/scripts/import-openings.parity.test.ts) | Importer rows match `fenKey()`-normalized lookups, byte for byte |
+| [explorer.test.ts](../../apps/api/src/services/explorer.test.ts) | Parsing third-party explorer JSON (malformed rows dropped, totals taken from the position rather than the truncated move list) and the fenKey guard. Pure — needs no DB despite living beside the integration tests |
 
 ## Three tests that must not be weakened
 

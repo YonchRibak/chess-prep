@@ -3,6 +3,10 @@
 A **read-only reference**. The user's repertoire lives in its own tables and never
 mutates `opening_book_entries`.
 
+**Not to be confused with the [opening explorer](explorer.md)** (Phase 9b). The book names
+positions; the explorer counts games. The book has no frequency data and dries up around
+ply 8–10, so it must not be used to rank opponent replies.
+
 ## Source data
 
 The lichess-org `chess-openings` TSVs are vendored at

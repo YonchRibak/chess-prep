@@ -1,15 +1,18 @@
 # Repertoire growth & line scopes
 
-**Status: 9a is BUILT; 9b–9d are designed, NOT built.**
+**Status: 9a and 9b are BUILT; 9c–9d are designed, NOT built.**
 
 - **Line scopes (9a) are shipped** — `moves.line_tags`, `DrillRules.scope`, and the
   filtering in both queue builders and the walker's build seed. The authoritative
   description of what exists is
   [srs-drilling](srs-drilling.md#line-scopes-phase-9a); the section below is the design
   it was built from and may differ in detail from the code.
-- **Everything else here — the explorer cache, candidate ranking, auto-expansion, the
-  frontier prefetcher, `drill_attempts`, interference detection, shadow lines — has no
-  tables, no modules, and no UI.** Read those parts as intent, not current state.
+- **The explorer cache and candidate ranking (9b) are shipped** — table, service,
+  endpoint, and the pure selection policy, all tested. Authoritative description:
+  [explorer](explorer.md). **No UI consumes them yet.**
+- **Auto-expansion, the frontier prefetcher, the candidate UI, `drill_attempts`,
+  interference detection and shadow lines have no tables, no modules, and no UI.** Read
+  those parts as intent, not current state.
 
 See [roadmap](../06-workflows/roadmap.md) and PROJECT_SPEC §5.
 
@@ -174,7 +177,7 @@ uniformly.
 | Change | Table | Note |
 |---|---|---|
 | `line_tags text[] not null default '{}'` | `moves` | ✅ applied, migration `0005_line_tags`. Inherited on insert |
-| new `explorer_entries` | — | Cache; safe to truncate |
+| new `explorer_entries` | — | ✅ applied, migration `0006_explorer_entries`. Cache; safe to truncate |
 | new `drill_attempts` | — | Append-only; cascade from `moves` |
 | `scope` field | `repertoires.drill_rules` (jsonb) | ✅ shipped. Partial, via `mergeDrillRules()`; validated on write by `parseLineScope` |
 
@@ -194,7 +197,7 @@ one prep row per `(user, parent_position)` beyond the existing constraint.
 | | Work | Unlocks |
 |---|---|---|
 | **9a** ✅ | `line_tags` + inherit-on-insert; derived opening-name scope; `DrillRules.scope` + picker | Request 1, entirely — no network |
-| **9b** | `explorer_entries` + Lichess explorer client in `packages/shared`; candidate ranking | The supply side of request 2 |
+| **9b** ✅ | `explorer_entries` + Lichess explorer client; candidate ranking in `packages/shared` — see [explorer](explorer.md) | The supply side of request 2 |
 | **9c** | Opponent auto-expand; ranked candidate UI in the build phase; frontier prefetcher | Request 2 — the seamless part |
 | **9d** | `drill_attempts`; mistakes scope; interference detection; refutation shadow lines | Mistake rehearsal |
 

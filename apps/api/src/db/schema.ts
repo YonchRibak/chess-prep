@@ -144,6 +144,34 @@ export const openingBookEntries = pgTable(
 );
 
 /**
+ * Phase 9b: a **cache** of opening-explorer statistics, never a source of
+ * truth. Safe to truncate at any time — every path that reads it must also
+ * work with it cold, the same rule that keeps the backend non-authoritative
+ * for a live drill session.
+ *
+ * `source` carries the dataset AND its filters (e.g.
+ * `lichess:blitz,rapid,classical:1600`) because the same position has
+ * genuinely different statistics per rating band and time control; keying on
+ * `fen_key` alone would silently blend them.
+ *
+ * `moves` is jsonb rather than a child table: it is always read and written
+ * whole, it is disposable, and a row per move would triple the write cost of a
+ * cache fill for no query we intend to run.
+ */
+export const explorerEntries = pgTable(
+  'explorer_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fenKey: text('fen_key').notNull(),
+    source: text('source').notNull(),
+    total: integer('total').notNull().default(0),
+    moves: jsonb('moves').notNull().default(sql`'[]'::jsonb`),
+    fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('uniq_explorer_fen_source').on(t.fenKey, t.source)],
+);
+
+/**
  * Phase 8a daily-diet settings. One row per user. `newCardsPerDay` caps how
  * many cards in FSRS state=new can enter the daily diet — without this,
  * fresh repertoires flood the first sessions. `dailyDietLastResetAt` is the
@@ -168,3 +196,4 @@ export type DbMove = typeof moves.$inferSelect;
 export type DbSrsCard = typeof srsCards.$inferSelect;
 export type DbOpeningBookEntry = typeof openingBookEntries.$inferSelect;
 export type DbUserSettings = typeof userSettings.$inferSelect;
+export type DbExplorerEntry = typeof explorerEntries.$inferSelect;

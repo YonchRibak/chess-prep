@@ -20,6 +20,7 @@ Legend: ✅ done · ⏸ parked
 | **8a** ✅ | Daily diet — scope picker, round-robin interleave across repertoires, `new_cards_per_day` cap, `UserSettings` |
 | **8b** ✅ | Engine gating — module-level `setGated`, per-phase gating in the walker, arrows + eval in build phases |
 | **8c** ✅ | Navigation & flow polish — path-replay board loading, `MoveLine`, retrain-on-wrong-answer, working skip, inline 409 swap, daily-first home, single creation flow, hash routing |
+| **9b** ✅ | Explorer cache + ranking — `explorer_entries`, the lichess read-through client (never throws, backs off on 429), `GET /explorer/:fenKey`, and the pure candidate-selection policy in `packages/shared`. **Data layer only — no UI consumes it yet (that's 9c)** |
 | **9a** ✅ | Line scopes — `moves.line_tags` with inherit-on-insert, `DrillRules.scope` (`all` / `openingName` / `tag`), honored by both queue builders and the walker's build seed, offline opening-name cache, scope picker in drill setup and a tag field in the editor |
 
 **End of Phase 8 is the real MVP** and it is reached. Everything below is additive.
@@ -37,19 +38,18 @@ Legend: ✅ done · ⏸ parked
 
 ## Next up
 
-### Phase 9b–9d — Repertoire growth ⏸ designed, not built
+### Phase 9c–9d — Repertoire growth ⏸ designed, not built
 
 Designed in [repertoire-growth.md](../03-domain/repertoire-growth.md) — read that before
-proposing work here. **9a (line scopes) is shipped**; what remains is the *supply side* of
-the walker's drill-pauses-for-build: silent auto-expansion of opponent replies (they carry
-no cards) plus engine + Lichess-explorer ranked candidates for the user's own move, and a
-`drill_attempts` log for recency-weighted mistake drilling and transposition interference
-detection.
+proposing work here. **9a (line scopes) and 9b (the explorer data layer) are shipped**;
+what remains is everything the user can actually see: the walker's build prompt still shows
+no candidates, and nothing auto-expands.
 
-- **9b** — `explorer_entries` cache + Lichess explorer client + candidate ranking in
-  `packages/shared`.
 - **9c** — opponent auto-expand, ranked candidate UI in the build phase, frontier
   prefetcher. Must be opt-in per repertoire and must never re-add a dropped branch.
+  The ranking functions it needs already exist and are tested
+  ([explorer](../03-domain/explorer.md)); 9c is the wiring plus a per-repertoire opt-in
+  flag, which has **no column yet**.
 - **9d** — `drill_attempts`, mistakes scope, interference detection, refutation shadow
   lines (stored, never carded).
 

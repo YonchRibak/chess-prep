@@ -43,6 +43,13 @@
       "when": 1787239688770,
       "tag": "0005_line_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787244186327,
+      "tag": "0006_explorer_entries",
+      "breakpoints": true
     }
   ]
 }

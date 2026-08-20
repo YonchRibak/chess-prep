@@ -96,6 +96,14 @@ and `validateAndNormalizeFenKey` (the guard that keeps
 path params from being re-parsed inconsistently). Matching logic itself is shared with
 the client — see [opening-database](../03-domain/opening-database.md).
 
+## explorer.ts
+
+Phase 9b read-through cache over the lichess opening explorer. The rule that shapes the
+whole module: **it never throws.** A failed fetch returns the stale row, or `null`; a `429`
+arms a 60-second global backoff. Selection policy lives in `packages/shared`, not here, so
+both sides rank identically. Details and the local 401 gotcha:
+[explorer](../03-domain/explorer.md).
+
 ## srs.ts
 
 - `pullCards(userId, since?, repertoireId?)` → `{ cards, serverTime }`. `serverTime`

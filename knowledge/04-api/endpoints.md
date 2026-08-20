@@ -65,6 +65,19 @@ malformed one; the rest of the rules body stays opaque jsonb.
 | `POST /openings/identify-deepest` | `{ fenKeys: string[] }` — path-walk in one round trip; rejects non-array or non-string entries with `400` |
 | `POST /openings/by-fens` | `{ fenKeys: string[] }` → `{ openings: Record<fenKey, OpeningId> }`. Bulk lookup with **no** path walk — unknown keys are simply absent. Feeds the client's offline name cache for [line scopes](../03-domain/srs-drilling.md#line-scopes-phase-9a) |
 
+## `/explorer`
+
+[routes/explorer.ts](../../apps/api/src/routes/explorer.ts) — Phase 9b, read-through cache.
+
+| Endpoint | Notes |
+|---|---|
+| `GET /explorer/:fenKey` | → `{ entry, source, backoffMs }`. `?cachedOnly=1` skips the network entirely |
+
+**A cold miss with no network is `200` with `entry: null`, not an error.** Callers fall
+back to book continuations; a 5xx would turn a degraded-but-fine state into a broken build
+prompt. `backoffMs > 0` means a lichess `429` armed the global backoff and fetches are
+paused (cache reads continue). See [explorer](../03-domain/explorer.md).
+
 ## `/srs`
 
 [routes/srs.ts](../../apps/api/src/routes/srs.ts)
