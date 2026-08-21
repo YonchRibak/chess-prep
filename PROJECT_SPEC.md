@@ -194,7 +194,7 @@ Chessground + chess.js wired together. `useChessRules`, `useBoard`. Undo/redo, f
 Position-keyed tree, transposition collapse, tree view editor, comments/annotations/main-line/priority, PGN import (variations + NAGs + comments) and export, tags. Round-trip fidelity verified.
 
 ### Phase 3 — Drill engine + SRS ✅ done
-Flashcard loop with FSRS grading; IndexedDB offline; sync on reconnect via push queue. Drill modes implemented: `due`, `walkthrough`, `weak`, `random`. Per-repertoire rules: min/max depth, branching (all vs main_line_only), blindfold, evalAfterAnswer flag (UI wiring for the eval reveal is finished in Phase 8).
+Flashcard loop with FSRS grading; IndexedDB offline; sync on reconnect via push queue. Drill modes implemented **in this phase**: `due`, `walkthrough`, `weak`, `random` (Phase 9d later adds a fifth, `mistakes`). Per-repertoire rules: min/max depth, branching (all vs main_line_only), blindfold, evalAfterAnswer flag (UI wiring for the eval reveal is finished in Phase 8).
 
 **Flow mode (default loop):** the session auto-grades on move attempt — correct = Good, wrong = Again — and keeps the cards flowing without a manual reveal pane. Walkthrough mode uses ONE persistent board across the whole session: after a correct user move the saved opponent reply auto-plays on the same board and the user is now in the next card. Random / due / weak modes snap-load the next card's parent FEN. The drill mode selected in DrillSetup is threaded through the view (`{ kind: 'drill-session', repertoireId, mode }`); the walkthrough queue carries an `opponentResponseSan` on each card so `DrillSession` can play it via `useChessRules.playSan()`.
 
