@@ -28,7 +28,13 @@ export function buildDeepestOpeningIndex(
   if (!root) return out;
 
   const movesByParent = new Map<string, typeof rep.moves>();
+  // Phase 9d: a refutation shadow line must not name a position. It is a
+  // punishment of a mistake, so letting it reach a position first would put
+  // that position (and everything below it) into a line the user never chose,
+  // and an `openingName`-scoped session would then include or exclude the
+  // wrong branches.
   for (const m of rep.moves) {
+    if (m.isRefutation) continue;
     const arr = movesByParent.get(m.parentPositionId) ?? [];
     arr.push(m);
     movesByParent.set(m.parentPositionId, arr);

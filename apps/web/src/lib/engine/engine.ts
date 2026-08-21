@@ -33,6 +33,21 @@ export interface AnalyzeOptions {
   movetime?: number;
   /** Number of lines to track simultaneously. Defaults to 1. */
   multipv?: number;
+  /**
+   * Phase 9d: run this ONE analysis even while the engine is gated, without
+   * lifting the gate for anyone else.
+   *
+   * The gate exists so the engine cannot leak a card's answer. Capturing a
+   * refutation shadow line needs an eval during a drill — but of the position
+   * the user *reached by playing the wrong move*, which is not the card's
+   * parent and therefore holds no answer to leak. Toggling `setGated(false)`
+   * around such a call would open a real window (the gate is process-wide);
+   * this flag keeps the gate closed and exempts a single, named call.
+   *
+   * Only pass this with a FEN you can show is not an unanswered card's
+   * position.
+   */
+  bypassGate?: boolean;
 }
 
 type Listener = (progress: AnalysisProgress) => void;
@@ -139,7 +154,7 @@ export class Engine {
    */
   analyze(fen: string, opts: AnalyzeOptions = {}): void {
     if (!this.worker) throw new Error('Engine not initialized');
-    if (this.gated) {
+    if (this.gated && opts.bypassGate !== true) {
       this.send('stop');
       return;
     }

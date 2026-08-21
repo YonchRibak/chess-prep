@@ -157,8 +157,46 @@ branches (calling one "your prep" would be false). In the daily diet it is scope
 card's **own** repertoire — the same SAN prepped in the other color's repertoire is not
 this mix-up.
 
-**Not built:** refutation shadow lines. See
-[repertoire-growth](repertoire-growth.md#mistake-rehearsal).
+### Refutation shadow lines (Phase 9d)
+
+After a miss, [RefutationPrompt](../../apps/web/src/components/RefutationPrompt.tsx)
+offers "Why is *X* bad?". It analyzes the position the **wrong move** reached (with
+`bypassGate` — see [engine](engine.md#engine-gating)), converts the PV to SAN via
+`pvToRefutationSans()` in [packages/shared](../../packages/shared/src/refutation.ts), and
+on confirmation stores `[wrongSan, ...pv]` — at most `MAX_REFUTATION_PLIES` (6) — through
+`POST /repertoires/:id/refutations`.
+
+The line is stored on `moves` with **`is_refutation = true`**, and that is the whole
+feature: it is prep nowhere.
+
+| Excluded by | Where |
+|---|---|
+| SRS cards — never created, for any ply, including user-side ones | `appendLineCore` |
+| The one-prep-per-user-turn-position slot | `enforceOnePrepPerUserPosition` |
+| Coverage and the build seed | `buildIndices` → `movesByParent` ([walker](walker.md)) |
+| Both drill queues, and walkthrough's main-line walk | [queue.ts](../../apps/web/src/lib/drill/queue.ts) |
+| Interference hits | [interference.ts](../../apps/web/src/lib/drill/interference.ts) |
+| Opening-name path inheritance | [pathNames.ts](../../apps/web/src/lib/openings/pathNames.ts) |
+| Card counts in repertoire stats | [repStats.ts](../../apps/web/src/lib/repStats.ts) |
+| PGN export | `exportPgn` |
+
+A **dedicated column, not a `line_tags` value**: every row above has to exclude it, and a
+tag check that one call site forgets fails silently — the shadow line simply becomes prep
+and starts appearing in drills.
+
+Two asymmetries worth knowing:
+- **Promotion is one-way.** A prep write onto an existing shadow edge promotes it (and
+  gives it a card): the user just decided to play that move. A refutation walking over
+  existing prep never demotes it, which would strip a card that has SRS history.
+- **Auto-expansion must see shadow edges** so it never proposes a SAN that would collide
+  with one and silently promote it. That is what `WalkerIndices.allMovesByParent` is for
+  ([walker](walker.md)).
+
+Saving is online-only and not queued for offline retry — a shadow line is an optional
+annotation, and replaying tree writes on reconnect is reserved for grades.
+
+**Not built:** using the attempt log to steer growth (expanding the frontier where the
+user is weak). See [repertoire-growth](repertoire-growth.md#mistake-rehearsal).
 
 ## Three drill implementations (known debt)
 

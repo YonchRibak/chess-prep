@@ -27,17 +27,19 @@ export interface InterferenceHit {
 }
 
 /**
- * User-side, non-dropped moves only.
+ * User-side, non-dropped, non-shadow moves only.
  *
  * An opponent reply that happens to share the SAN is a coincidence, not a
- * confusion; and a dropped branch is a line the user has explicitly stopped
- * covering, so citing it as "your move" would be false.
+ * confusion; a dropped branch is a line the user has explicitly stopped
+ * covering, so citing it as "your move" would be false; and a Phase 9d
+ * refutation shadow line is a move the user played *by mistake* — reporting it
+ * back as "that's your prep elsewhere" would be exactly backwards.
  */
 function userPreps(repertoire: RepertoireFull): PrepRef[] {
   const positionById = new Map(repertoire.positions.map((p) => [p.id, p]));
   const out: PrepRef[] = [];
   for (const m of repertoire.moves) {
-    if (m.isDropped) continue;
+    if (m.isDropped || m.isRefutation) continue;
     const parent = positionById.get(m.parentPositionId);
     if (!parent) continue;
     if (!isUserMove(fenTurn(parent.fullFen), repertoire.color as Color)) continue;

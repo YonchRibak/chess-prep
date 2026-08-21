@@ -24,7 +24,9 @@ export function computeRepStats(
 ): RepStats {
   const indices = buildIndices(rep);
   const cov = computeCoverage(rep, indices);
-  const liveMoveIds = new Set(rep.moves.filter((m) => !m.isDropped).map((m) => m.id));
+  const liveMoveIds = new Set(
+    rep.moves.filter((m) => !m.isDropped && !m.isRefutation).map((m) => m.id),
+  );
 
   let totalCards = 0;
   let dueCards = 0;

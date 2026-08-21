@@ -34,6 +34,7 @@ import { getAllCardsLocal, putRepertoireLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import { gradeAndQueue, logAttempt } from '../lib/srs/sync.ts';
 import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
+import { RefutationPrompt } from '../components/RefutationPrompt.tsx';
 import { buildDailyDietQueue, type DailyDietItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import {
@@ -447,6 +448,12 @@ export function DailyDiet() {
                     ? 'Graded Again — watch the correct move…'
                     : `Now play ${currentItem.move.san} yourself to continue.`}
                 </p>
+                <RefutationPrompt
+                  key={`${currentItem.move.id}:${phase.userSan}`}
+                  repertoireId={currentItem.repertoireId}
+                  parentFullFen={currentItem.parentPosition.fullFen}
+                  wrongSan={phase.userSan}
+                />
               </Card>
             )}
           </aside>

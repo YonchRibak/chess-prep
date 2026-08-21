@@ -1,0 +1,1 @@
+ALTER TABLE "moves" ADD COLUMN "is_refutation" boolean DEFAULT false NOT NULL;

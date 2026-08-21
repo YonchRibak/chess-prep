@@ -22,6 +22,7 @@ function move(san: string, isDropped = false): RepertoireMove {
     priority: 0,
     isDropped,
     lineTags: [],
+    isRefutation: false,
   };
 }
 

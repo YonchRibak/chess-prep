@@ -10,9 +10,18 @@ traversal, differing only in the **seed** that picks nodes.
 
 ## Indices
 
-`buildIndices(rep)` → `WalkerIndices` with three maps: `positionByKey`, `positionById`,
-`movesByParent`. Every other function takes these; build them once per session, not per
-step.
+`buildIndices(rep)` → `WalkerIndices` with four maps: `positionByKey`, `positionById`,
+`movesByParent`, `allMovesByParent`. Every other function takes these; build them once per
+session, not per step.
+
+`movesByParent` holds **prep edges only** — Phase 9d refutation shadow lines
+(`is_refutation`) are dropped here, at the one choke point every walker consumer passes
+through rather than at each `!isDropped` filter. A shadow counted as coverage would make a
+position look prepped and the walker would stop asking about it.
+
+`allMovesByParent` holds every edge, shadows included, and answers exactly one question:
+"does this SAN already exist here?" Auto-expansion uses it so it never proposes a SAN that
+would land on a shadow edge and silently promote it to prep.
 
 ## Attention nodes
 

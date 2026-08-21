@@ -36,6 +36,7 @@ validation error from the service rather than a crash.
 | `DELETE /repertoires/:id` | — | `204` |
 | `POST /repertoires/:id/moves` | `{ parentFenKey, san, isMainLine?, onConflict?, lineTags? }` | `201 AddedMove` |
 | `POST /repertoires/:id/moves/batch` | `{ fromFenKey, sans[], onConflict?, lineTags? }` | `201 { added, reused, ... }` |
+| `POST /repertoires/:id/refutations` | `{ fromFenKey, sans[] }` | `201 { added, reused, ... }`. Phase 9d shadow line — stored, never carded, never prep |
 | `PATCH /repertoires/:id/moves/:moveId` | `{ comment?, annotation?, isMainLine?, priority?, isDropped?, lineTags? }` | `204` |
 | `DELETE /repertoires/:id/moves/:moveId` | — | `204` |
 | `POST /repertoires/import` | `{ name, color, pgn, tags? }` | `201` |
