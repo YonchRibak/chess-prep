@@ -58,7 +58,7 @@ from "broken". See [explorer](../03-domain/explorer.md).
 | `pnpm dev:web` / `pnpm dev:api` | One side (api via `tsx watch`) |
 | `pnpm typecheck` | All packages |
 | `pnpm test` | All packages — see [testing](testing.md) |
-| `pnpm lint` | Only meaningful for `apps/web` |
+| `pnpm lint` | Only meaningful for `apps/web` — flat config, `--max-warnings 0`. See [monorepo](../02-architecture/monorepo.md) |
 | `pnpm build` | `tsc -b && vite build` (web), `tsc` (api) |
 | `pnpm db:generate` | Generate a migration after editing `schema.ts` |
 | `pnpm db:studio` | Drizzle Studio |

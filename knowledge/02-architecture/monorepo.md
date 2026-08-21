@@ -45,8 +45,12 @@ Root ([package.json](../../package.json)) fans out with `pnpm -r`:
 
 API-only: `pnpm --filter @chess-prep/api db:import-openings` loads the ECO TSVs.
 
-Note `lint` is only configured on `apps/web` (ESLint 9 flat-ish config via CLI args);
-api and shared echo a placeholder. `apps/api` runs `vitest run --passWithNoTests`
+Note `lint` is only configured on `apps/web`, via
+[eslint.config.js](../../apps/web/eslint.config.js) — ESLint 9 **flat config**, the only
+format it reads (`.eslintrc.*` and the `--ext` flag are both gone in v9, which is why the
+script is a bare `eslint .` with `files` globs in the config). Type-checked linting is
+deliberately off: it needs a second full TS program per run and `pnpm typecheck` already
+covers what type information would buy. api and shared echo a placeholder. `apps/api` runs `vitest run --passWithNoTests`
 because its tests need a live database.
 
 ## Runtime topology

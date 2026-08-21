@@ -63,7 +63,13 @@ export function useChessRules(initialFen?: string): ChessRules {
       map.set(m.from, arr);
     }
     return map;
-    // recompute whenever fen changes
+    // `state.fen` IS the dependency, even though the body reads `gameRef`
+    // instead: the ref is mutated in place, so it never changes identity and
+    // the linter sees no dependency at all. Removing `state.fen` (as
+    // exhaustive-deps suggests) would compute the legal-move map once and
+    // serve it for the rest of the session — every move after the first would
+    // be rejected as illegal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.fen]);
 
   const legalDestsFrom = useCallback(

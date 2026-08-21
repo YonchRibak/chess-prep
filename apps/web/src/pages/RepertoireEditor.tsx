@@ -13,8 +13,34 @@ import { engineArrows } from '../lib/engine/arrows.ts';
 import type { BoardColor } from '../lib/chess/useBoard.ts';
 import { api, ApiError, type RepertoireFull, type RepertoireMove } from '../api/client.ts';
 
+/**
+ * Thin shell: it owns the "nothing loaded" case so that `Editor` below can
+ * take a non-null repertoire and run its hooks unconditionally.
+ *
+ * The two were one component until the early return sat *above*
+ * `useChessRulesPinnedTo` / `useEngine` / two `useMemo`s — so an `active` that
+ * went from set to null (navigating away, a failed reload) changed the hook
+ * count between renders, which React reports as a crash rather than a
+ * re-render. Keep the guard here, not in `Editor`.
+ */
 export function RepertoireEditor() {
   const active = useAppStore((s) => s.active);
+  const go = useAppStore((s) => s.go);
+
+  if (!active) {
+    return (
+      <div className="text-slate-400">
+        No repertoire loaded.{' '}
+        <button className="underline" onClick={() => go({ kind: 'list' })}>
+          Back to list
+        </button>
+      </div>
+    );
+  }
+  return <Editor active={active} />;
+}
+
+function Editor({ active }: { active: RepertoireFull }) {
   const go = useAppStore((s) => s.go);
   const reloadActive = useAppStore((s) => s.reloadActive);
   const setComment = useAppStore((s) => s.setComment);
@@ -25,9 +51,9 @@ export function RepertoireEditor() {
   const exportPgnFn = useAppStore((s) => s.exportPgn);
 
   // Current viewing position (a fenKey in the repertoire's position table).
-  const [currentFenKey, setCurrentFenKey] = useState<string>(active?.rootFenKey ?? '');
+  const [currentFenKey, setCurrentFenKey] = useState<string>(active.rootFenKey);
   const [lastMoveId, setLastMoveId] = useState<string | null>(null);
-  const [orientation, setOrientation] = useState<BoardColor>(active?.color ?? 'white');
+  const [orientation, setOrientation] = useState<BoardColor>(active.color);
   const [engineEnabled, setEngineEnabled] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
 
@@ -44,17 +70,6 @@ export function RepertoireEditor() {
 
   // Lookup indices: positions by key/id, moves by parent.
   const indices = useMemo(() => buildIndices(active), [active]);
-
-  if (!active) {
-    return (
-      <div className="text-slate-400">
-        No repertoire loaded.{' '}
-        <button className="underline" onClick={() => go({ kind: 'list' })}>
-          Back to list
-        </button>
-      </div>
-    );
-  }
 
   const currentPosition = indices.positionByKey.get(currentFenKey);
   const currentFullFen = currentPosition?.fullFen ?? active.rootFullFen;
@@ -784,8 +799,8 @@ function flattenTree(rep: RepertoireFull, indices: Indices): TreeRenderToken[] {
   function walk(parentPositionId: string, parentFullFen: string, depth: number, isLineStart: boolean) {
     const children = sortSiblings(indices.movesByParent.get(parentPositionId) ?? []);
     if (children.length === 0) return;
-    let currentFullFen = parentFullFen;
-    let pairFlow = !isLineStart;
+    const currentFullFen = parentFullFen;
+    const pairFlow = !isLineStart;
 
     for (let idx = 0; idx < children.length; idx++) {
       const m = children[idx]!;
