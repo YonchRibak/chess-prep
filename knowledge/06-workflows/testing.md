@@ -33,7 +33,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [import-openings.parity.test.ts](../../apps/api/src/scripts/import-openings.parity.test.ts) | Importer rows match `fenKey()`-normalized lookups, byte for byte |
 | [explorer.test.ts](../../apps/api/src/services/explorer.test.ts) | Parsing third-party explorer JSON (malformed rows dropped, totals taken from the position rather than the truncated move list) and the fenKey guard. Pure — needs no DB despite living beside the integration tests |
 
-## Three tests that must not be weakened
+## Four tests that must not be weakened
 
 These exist because the failure they prevent is **silent**:
 
@@ -46,6 +46,11 @@ These exist because the failure they prevent is **silent**:
 3. **The FEN parity pair** — drift in `fenKey()` between the importer, the API, and the
    client breaks transposition collapse and opening naming with no error anywhere.
    ([fen-keying](../03-domain/fen-keying.md))
+4. **`autoExpand.test.ts` → "NEVER re-adds a dropped branch"** — a position whose replies
+   were all dropped is indistinguishable from an untouched one by the walker's "no live
+   children" rule, so weakening this filter makes auto-expansion re-add exactly what the
+   user rejected, silently, every session.
+   ([walker](../03-domain/walker.md#auto-expansion-phase-9c))
 
 ## Writing testable code here
 

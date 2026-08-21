@@ -85,7 +85,7 @@ Root scripts: `pnpm dev` / `dev:web` / `dev:api`, `build`, `test`, `lint`, `type
 ## Start here
 
 Read [knowledge/README.md](knowledge/README.md) before non-trivial work — it indexes
-20 short docs covering the product, architecture, domain model, API, web app, and
+22 short docs covering the product, architecture, domain model, API, web app, and
 workflows. Don't read the whole tree to orient yourself; the knowledge base exists to
 make that unnecessary.
 
@@ -95,13 +95,17 @@ Authority order when sources disagree:
    *intent*, including parked and future work that isn't built.
 3. **`knowledge/`** — describes *current state*.
 
-Before touching anything, know these four (all detailed in the knowledge base):
+Before touching anything, know these five (all detailed in the knowledge base):
 - The one-prep-per-user-turn-position invariant is **application-level, not a DB
   constraint**.
 - `fenKey()` in `packages/shared` is the **single** source of position identity.
 - Engine gating lives at the engine **module**, not in a panel component.
 - Types existing in `packages/shared/src/types.ts` does **not** mean a feature is wired
-  (see the parked opponent-scouting types).
+  (see the parked opponent-scouting types). That file mirrors the *schema*; the actual
+  wire contract is the service DTO / `apps/web/src/api/client.ts`.
+- Anything explorer-shaped must work with its cache **cold** — offline, and on networks
+  where lichess's explorer host is blocked. Silent writes (auto-expansion) require real
+  frequency data and must never re-add a dropped branch.
 
 ## Maintaining the knowledge base
 
@@ -126,6 +130,7 @@ owner in [knowledge/README.md](knowledge/README.md):
 | Walker traversal, seeds, skip/drop | `03-domain/walker.md` |
 | Drill queues, FSRS, drill rules, daily diet | `03-domain/srs-drilling.md` |
 | Stockfish, gating, eval surfaces | `03-domain/engine.md` |
+| Explorer stats, its cache, candidate ranking, auto-expansion | `03-domain/explorer.md` |
 | ECO book, import, opening naming | `03-domain/opening-database.md` |
 | FEN normalization | `03-domain/fen-keying.md` |
 | Views, hash routes, `View` union | `05-web/views-and-routing.md` |
@@ -159,7 +164,7 @@ When you do create one:
 ### Writing standard
 
 Match the existing docs:
-- **Reference real files** with relative markdown links (`[schema.ts](../../apps/api/src/db/schema.ts)`).
+- **Reference real files** with relative markdown links (e.g. `[schema.ts](../../apps/api/src/db/schema.ts)` from a `knowledge/<section>/` file — link targets are relative to the linking doc).
   Verify paths resolve; a broken link is a bug.
 - **Explain *why*, not just *what*.** The code already says what it does. The docs earn
   their place by capturing rationale, invariants, and the failure mode a rule prevents —

@@ -63,8 +63,10 @@ Three rules, all guarding silent failures
    every session. The caller must pass **all** moves at the parent, dropped included.
 2. **Only explorer-sourced candidates authorize a write** — the book's ordering is
    alphabetical, not popular ([explorer](explorer.md#consuming-it-phase-9c)).
-3. **Capped** at 3 replies per position, and `AUTO_EXPAND_MAX_STEPS` bounds the
-   expand-then-re-walk loop so a pathological tree can't spin instead of prompting.
+3. **Capped** at 3 replies per position (the `max` option). Separately,
+   `AUTO_EXPAND_MAX_STEPS` in
+   [WalkerSession.tsx](../../apps/web/src/pages/WalkerSession.tsx) bounds the
+   expand-then-re-walk loop, so a pathological tree can't spin instead of prompting.
 
 When nothing can be added — cold explorer, everything known, everything dropped — the
 walker falls through to the normal prompt rather than stalling. Off by default, per
@@ -144,4 +146,4 @@ The server returns `409`; the walker catches it and offers an inline swap confir
 
 ## Keyboard shortcuts
 
-`s` skip · `↵` back-to-drill · `b` keep building.
+`s` skip · `↵` or `space` back-to-drill · `b` keep building.

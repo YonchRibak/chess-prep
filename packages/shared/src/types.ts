@@ -1,4 +1,15 @@
+/**
+ * Entity shapes, mirroring the database schema.
+ *
+ * **These are not the wire contract.** What actually crosses the network is the
+ * service DTO in [apps/api/src/services/repertoires.ts] and its counterpart in
+ * [apps/web/src/api/client.ts] (`RepertoireFull`, `RepertoireMove`, …), which
+ * carry denormalized helper fields the tables don't have. Keep these in sync
+ * with the schema when it changes, but reach for the DTO when writing code
+ * that talks to the API.
+ */
 import type { FenKey } from './fen.js';
+import type { DrillRules } from './drill.js';
 
 export type Color = 'white' | 'black';
 export type Source = 'lichess' | 'chesscom';
@@ -15,6 +26,13 @@ export interface Repertoire {
   userId: string;
   name: string;
   color: Color;
+  tags: string[];
+  /** Partial — always read through `mergeDrillRules()`. */
+  drillRules: DrillRules;
+  /** Phase 9c: opt-in silent auto-expansion of opponent replies while building. */
+  autoExpand: boolean;
+  rootFenKey: FenKey;
+  rootFullFen: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,6 +55,10 @@ export interface Move {
   annotation: string | null;
   isMainLine: boolean;
   priority: number;
+  /** Phase 7: persistent "won't cover" marker; the walker skips it and its subtree. */
+  isDropped: boolean;
+  /** Phase 9a: line membership, inherited from the parent edge on insert. */
+  lineTags: string[];
 }
 
 export interface SrsCard {

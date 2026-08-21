@@ -20,9 +20,9 @@ Legend: ✅ done · ⏸ parked
 | **8a** ✅ | Daily diet — scope picker, round-robin interleave across repertoires, `new_cards_per_day` cap, `UserSettings` |
 | **8b** ✅ | Engine gating — module-level `setGated`, per-phase gating in the walker, arrows + eval in build phases |
 | **8c** ✅ | Navigation & flow polish — path-replay board loading, `MoveLine`, retrain-on-wrong-answer, working skip, inline 409 swap, daily-first home, single creation flow, hash routing |
-| **9c** ✅ | Growth loop — opt-in `repertoires.auto_expand`, silent opponent expansion (never re-adds a dropped branch, never writes from book order), engine+explorer candidates in the build prompt, idle frontier prefetcher |
-| **9b** ✅ | Explorer cache + ranking — `explorer_entries`, the lichess read-through client (never throws, backs off on 429), `GET /explorer/:fenKey`, and the pure candidate-selection policy in `packages/shared`. **Data layer only — no UI consumes it yet (that's 9c)** |
 | **9a** ✅ | Line scopes — `moves.line_tags` with inherit-on-insert, `DrillRules.scope` (`all` / `openingName` / `tag`), honored by both queue builders and the walker's build seed, offline opening-name cache, scope picker in drill setup and a tag field in the editor |
+| **9b** ✅ | Explorer cache + ranking — `explorer_entries`, the lichess read-through client (never throws, backs off on 429), `GET /explorer/:fenKey`, and the pure candidate-selection policy in `packages/shared` |
+| **9c** ✅ | Growth loop — opt-in `repertoires.auto_expand`, silent opponent expansion (never re-adds a dropped branch, never writes from book order), engine+explorer candidates in the build prompt, idle frontier prefetcher |
 
 **End of Phase 8 is the real MVP** and it is reached. Everything below is additive.
 

@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { fenKey as makeFenKey, type FenKey, type OpeningId } from '@chess-prep/shared';
-import { api, ApiError } from '../../api/client';
+import { api, ApiError } from '../../api/client.ts';
 
 const DEBOUNCE_MS = 80;
 

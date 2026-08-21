@@ -9,7 +9,7 @@
   it was built from and may differ in detail from the code.
 - **The explorer cache and candidate ranking (9b) are shipped** — table, service,
   endpoint, and the pure selection policy, all tested. Authoritative description:
-  [explorer](explorer.md). **No UI consumes them yet.**
+  [explorer](explorer.md).
 - **Auto-expansion, the candidate UI and the frontier prefetcher (9c) are shipped** —
   opt-in per repertoire via `repertoires.auto_expand`. Authoritative descriptions:
   [walker](walker.md#auto-expansion-phase-9c) and [explorer](explorer.md).

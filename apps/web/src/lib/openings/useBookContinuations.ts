@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { fenKey as makeFenKey, type FenKey } from '@chess-prep/shared';
-import { api, ApiError, type BookContinuation } from '../../api/client';
+import { api, ApiError, type BookContinuation } from '../../api/client.ts';
 
 const cache = new Map<string, BookContinuation[]>();
 

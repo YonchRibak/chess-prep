@@ -103,7 +103,10 @@ The flexibility that Lotus lacks comes from modeling repertoires as **position-k
 ```
 User (id, email, created_at)
 
-Repertoire (id, user_id, name, color['white'|'black'], drill_rules, created_at, updated_at)
+Repertoire (id, user_id, name, color['white'|'black'], tags[], drill_rules,
+            root_fen_key, root_full_fen,
+            auto_expand,          -- Phase 9c: opt-in silent opponent auto-expansion
+            created_at, updated_at)
 
 Position (id, repertoire_id, fen_key, full_fen)
 
@@ -112,6 +115,8 @@ Move (
   parent_position_id, child_position_id,
   san, uci,
   comment, annotation, is_main_line, priority,
+  is_dropped,       -- Phase 7: persistent "won't cover"; walker skips it and its subtree
+  line_tags[],      -- Phase 9a: line membership, inherited from the parent edge on insert
   -- DB constraint: uniq_parent_san on (repertoire_id, parent_position_id, san)
   --   — no duplicate SAN from one parent, but DOES allow multiple distinct
   --     children per parent (intentional: opponent branches, AND historically
@@ -123,8 +128,9 @@ Move (
 
 SrsCard (
   id, user_id, move_id,
-  due_date, stability, difficulty, reps, lapses,
-  last_reviewed, state,
+  due, stability, difficulty, elapsed_days, scheduled_days,
+  reps, lapses, state, last_review, updated_at,
+  -- Persist EVERY FSRS field, not just `due`, or rescheduling breaks.
 )
 
 -- Opening database (read-only reference; added in Phase 5)
@@ -138,10 +144,21 @@ OpeningBookEntry (
   pgn_moves,        -- canonical move sequence from the start position
 )
 
+ExplorerEntry (             -- (added in Phase 9b) — a CACHE, never a source of truth
+  id,
+  fen_key,
+  source,                   -- dataset + filters, e.g. "lichess:blitz,rapid,classical:1600"
+  total,                    -- games at this position
+  moves,                    -- jsonb: [{ san, uci, white, draws, black }]
+  fetched_at,
+  -- unique (fen_key, source). Safe to truncate; every reader works with it cold.
+)
+
 UserSettings (              -- (added in Phase 8a)
   user_id,
   new_cards_per_day,        -- default 20
   daily_diet_last_reset_at,
+  updated_at,
 )
 
 -- Phase 10 (parked): OpponentDataset / OpponentPosition / OpponentMove
@@ -407,7 +424,7 @@ inherit-on-insert, `DrillRules.scope`, filtering in `buildDrillQueue` /
 UI in drill setup + the editor · **9b** explorer cache +
 ranking ✅ **done** — `explorer_entries` (migration `0006`), a read-through lichess
 client that never throws and backs off on 429, `GET /explorer/:fenKey`, and the pure
-selection policy in `packages/shared`; **data layer only, no UI consumes it yet** ·
+selection policy in `packages/shared` (consumed by the 9c build prompt) ·
 **9c** auto-expand + candidate UI + frontier prefetcher ✅ **done** — opt-in
 `repertoires.auto_expand` (migration `0007`); auto-expansion never re-adds a dropped
 branch and refuses to write from book-ordered candidates (only real frequencies

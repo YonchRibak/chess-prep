@@ -14,7 +14,7 @@
  * decided not to prep a branch. Coverage filtering happens elsewhere.
  */
 import type { OpeningId } from '@chess-prep/shared';
-import type { RepertoireFull } from '../../api/client';
+import type { RepertoireFull } from '../../api/client.ts';
 
 export type OpeningLookup = (fenKey: string) => OpeningId | null;
 

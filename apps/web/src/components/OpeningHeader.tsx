@@ -5,7 +5,7 @@
  * the book but an ancestor is, shows the ancestor's name with a "…" suffix.
  */
 import { useEffect, useRef, useState } from 'react';
-import { useDeepestOpeningId } from '../lib/openings/useOpeningId';
+import { useDeepestOpeningId } from '../lib/openings/useOpeningId.ts';
 import { fenKey as makeFenKey } from '@chess-prep/shared';
 
 interface Props {

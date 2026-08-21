@@ -43,6 +43,7 @@ and `name`.
 | `GET /openings?q&eco&limit` | Search by name substring and/or ECO code |
 | `GET /openings/by-fen/:fenKey` | Exact lookup. Param treated as **already normalized** |
 | `GET /openings/continuations/:fenKey` | Known named moves from this position |
+| `POST /openings/by-fens` | Bulk `fenKey → OpeningId` map, no path walk. Feeds the client's offline name cache for line scopes. |
 | `POST /openings/identify-deepest` | Path-walk lookup in one round trip |
 
 ## Deepest-name lookup

@@ -18,9 +18,9 @@
 import { useEffect, useState } from 'react';
 import type { RankedReply, UserCandidate } from '@chess-prep/shared';
 import { Card, Btn } from './ui';
-import { useBookContinuations } from '../lib/openings/useBookContinuations';
-import type { BookContinuation } from '../api/client';
-import type { CandidateSource } from '../lib/openings/candidates';
+import { useBookContinuations } from '../lib/openings/useBookContinuations.ts';
+import type { BookContinuation } from '../api/client.ts';
+import type { CandidateSource } from '../lib/openings/candidates.ts';
 
 interface MoveLite {
   san: string;

@@ -106,7 +106,7 @@ live outgoing move set is empty is uncovered; the walker computes it.
 
 `OpponentDataset` / `OpponentPosition` / `OpponentMove` appear as TypeScript types in
 [types.ts](../../packages/shared/src/types.ts) but have **no tables and no code paths** —
-they belong to the parked Phase 9 scouting feature. Don't assume they're wired.
+they belong to the parked **Phase 10** scouting feature. Don't assume they're wired.
 
 ## v2 shape to avoid painting into a corner
 

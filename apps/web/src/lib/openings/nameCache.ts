@@ -16,9 +16,8 @@
  * looks finished when it isn't.
  */
 import type { OpeningId } from '@chess-prep/shared';
-import { api } from '../../api/client';
+import { api, type RepertoireFull } from '../../api/client.ts';
 import { getAllOpeningNamesLocal, putOpeningNamesLocal } from '../idb/schema.ts';
-import type { RepertoireFull } from '../../api/client';
 
 /** In-memory mirror so repeated queue builds in one session are free. */
 let memo: Map<string, OpeningId> | null = null;

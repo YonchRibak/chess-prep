@@ -21,6 +21,8 @@ so there is no build step to keep in sync. Subpath exports exist for
 | [types.ts](../../packages/shared/src/types.ts) | Wire-shape entities: `Repertoire`, `Position`, `Move`, `SrsCard`, opponent-scouting types (unused, parked). |
 | [drill.ts](../../packages/shared/src/drill.ts) | `SrsCardDto`, `Grade`, `FsrsState`, `DrillMode`, `DrillRules` + `mergeDrillRules`, `isUserMove`, `fenTurn`. |
 | [openings.ts](../../packages/shared/src/openings.ts) | `identifyOpening` / `identifyDeepestOpening` — one matcher shared by client and server. |
+| [scope.ts](../../packages/shared/src/scope.ts) | Phase 9a line scopes: opening-name/tag matching and `line_tags` inheritance. |
+| [explorer.ts](../../packages/shared/src/explorer.ts) | Phase 9b explorer types and the candidate-selection policy. |
 | [pgn.ts](../../packages/shared/src/pgn.ts) | PGN tree parse/serialize with variations, NAGs, comments. |
 | [auth.ts](../../packages/shared/src/auth.ts) | `DEFAULT_USER_ID` single-user placeholder. |
 

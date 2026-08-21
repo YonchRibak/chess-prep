@@ -21,7 +21,7 @@ import {
   type RankedReply,
   type UserCandidate,
 } from '@chess-prep/shared';
-import { api, type BookContinuation } from '../../api/client';
+import { api, type BookContinuation } from '../../api/client.ts';
 import type { EngineLine } from '../engine/engine.ts';
 
 /** Where a candidate list came from — shown in the UI so the user can judge it. */
