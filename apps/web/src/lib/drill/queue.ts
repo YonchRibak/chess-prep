@@ -85,8 +85,13 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
   // Index lookups.
   const cardByMoveId = new Map(cards.map((c) => [c.moveId, c]));
   const positionById = new Map(repertoire.positions.map((p) => [p.id, p]));
+  // Phase 9d: refutation shadow lines are dropped here, before anything else
+  // looks at the tree. They carry no card, so they could never become a drill
+  // item — but they WOULD distort BFS depth and the walkthrough's main-line
+  // walk, which follow edges rather than cards.
+  const prepMoves = repertoire.moves.filter((m) => !m.isRefutation);
   const movesByParentId = new Map<string, RepertoireMove[]>();
-  for (const m of repertoire.moves) {
+  for (const m of prepMoves) {
     const arr = movesByParentId.get(m.parentPositionId) ?? [];
     arr.push(m);
     movesByParentId.set(m.parentPositionId, arr);
@@ -108,7 +113,7 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
 
   // Build the candidate item list, then filter by rules.
   const items: DrillItem[] = [];
-  for (const m of repertoire.moves) {
+  for (const m of prepMoves) {
     if (m.isDropped) continue; // Phase 7: walker skips dropped branches.
     const card = cardByMoveId.get(m.id);
     if (!card) continue;

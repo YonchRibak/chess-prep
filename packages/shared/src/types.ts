@@ -59,6 +59,11 @@ export interface Move {
   isDropped: boolean;
   /** Phase 9a: line membership, inherited from the parent edge on insert. */
   lineTags: string[];
+  /**
+   * Phase 9d: a refutation shadow line — stored, never prep. Never carded,
+   * never walked by the build seed, never drilled, never exported.
+   */
+  isRefutation: boolean;
 }
 
 export interface SrsCard {

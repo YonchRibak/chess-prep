@@ -22,7 +22,7 @@ Legend: ✅ done · ⏸ parked
 | **8c** ✅ | Navigation & flow polish — path-replay board loading, `MoveLine`, retrain-on-wrong-answer, working skip, inline 409 swap, daily-first home, single creation flow, hash routing |
 | **9a** ✅ | Line scopes — `moves.line_tags` with inherit-on-insert, `DrillRules.scope` (`all` / `openingName` / `tag`), honored by both queue builders and the walker's build seed, offline opening-name cache, scope picker in drill setup and a tag field in the editor |
 | **9b** ✅ | Explorer cache + ranking — `explorer_entries`, the lichess read-through client (never throws, backs off on 429), `GET /explorer/:fenKey`, and the pure candidate-selection policy in `packages/shared` |
-| **9d** 🚧 | Mistake rehearsal — `drill_attempts` (migration `0008`), logged by all three drill implementations, the recency-weighted `mistakes` drill mode, and interference detection on every miss. **Refutation shadow lines are not built.** |
+| **9d** ✅ | Mistake rehearsal — `drill_attempts` (migration `0008`), logged by all three drill implementations, the recency-weighted `mistakes` drill mode, interference detection on every miss, and refutation shadow lines (`moves.is_refutation`, migration `0009`): stored, never carded, never walked, never exported |
 | **9c** ✅ | Growth loop — opt-in `repertoires.auto_expand`, silent opponent expansion (never re-adds a dropped branch, never writes from book order), engine+explorer candidates in the build prompt, idle frontier prefetcher |
 
 **End of Phase 8 is the real MVP** and it is reached. Everything below is additive.
@@ -40,23 +40,12 @@ Legend: ✅ done · ⏸ parked
 
 ## Next up
 
-### Phase 9d — Refutation shadow lines ⏸ designed, not built
-
-The rest of 9d has shipped: the `drill_attempts` log, the `mistakes` drill mode, and
-interference detection — see
-[srs-drilling](../03-domain/srs-drilling.md#mistake-rehearsal-phase-9d).
-
-What remains is storing the engine's punishment of a miss a few plies deep, tagged as a
-refutation: **stored but never prep, never carded, never walked by the build seed.** If it
-ever produces an SRS card, the feature is wrong. It needs a marker on `moves` —
-prefer a **dedicated column** over a `line_tags` value, since a tag that must be checked
-in the walker, both queue builders, and PGN export is an invariant with no enforcement.
-Design in [repertoire-growth.md](../03-domain/repertoire-growth.md#mistake-rehearsal).
-
-**No column, module, or UI exists for it.**
-
-Also unbuilt from the 9d design: using the attempt log to steer growth (expand the
-frontier where the user is weak rather than uniformly).
+**Phase 9 is complete.** The remaining candidate from the 9d design is
+**weakness-steered growth** — using the attempt log to expand the frontier where the user
+is weak rather than uniformly. Nothing is built for it; the log it would read
+(`drill_attempts`) already exists, so it is a policy change in the walker's build seed,
+not new plumbing. Design note in
+[repertoire-growth](../03-domain/repertoire-growth.md#mistake-rehearsal).
 
 ## Parked
 

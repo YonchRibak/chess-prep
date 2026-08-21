@@ -26,6 +26,7 @@ The largest and most careful file. Key shapes:
 | `listRepertoires` / `getRepertoire` / `createRepertoire` / `patchRepertoire` / `deleteRepertoire` | CRUD. `createRepertoire` accepts `seedSans` to auto-insert an opening prefix |
 | `addMove` | Single move. See the flow below |
 | `appendLine` | Batch, idempotent, transactional. See below |
+| `appendRefutation` | Phase 9d shadow line: same walk, **no cards, no prep-slot check**. See below |
 | `patchMove` | comment / annotation / isMainLine / priority / **isDropped** |
 | `deleteMove` | Cascades to the move's SRS card |
 | `importPgn` / `exportPgn` | Via `pgnToTree` / `treeToPgn` from shared |
@@ -63,6 +64,26 @@ Bumps `repertoires.updatedAt` only when something was actually added.
 Tags are threaded down the walk: each new move inherits from the move above it, and a
 **reused** edge contributes *its own* tags to what follows — so appending through an
 existing tagged branch keeps that branch's tags rather than the caller's starting point.
+
+### `appendRefutation`
+
+Same walk as `appendLine`, with `isRefutation: true` threaded into `appendLineCore`, and
+that flag turns off the two things that make a move *prep*: no SRS card is created for any
+ply (including user-side ones), and `enforceOnePrepPerUserPosition` is neither consulted
+nor triggered — a shadow line does not compete for the one prep slot. Capped at
+`MAX_REFUTATION_PLIES` and rejects an empty `sans`.
+
+A separate endpoint and function rather than a flag on `/moves/batch`: the two write the
+same table and mean opposite things, and "never carded" should not be one typo away.
+
+Reuse rules where the walk meets existing edges — `promoteIfShadowed`:
+- a **prep** write onto a shadow edge promotes it to prep and creates the card it was
+  denied (the user just chose to play it);
+- a **refutation** walking over existing prep leaves it alone — demoting would silently
+  strip a card with SRS history.
+
+`exportPgn` filters shadow lines out. See
+[srs-drilling](../03-domain/srs-drilling.md#refutation-shadow-lines-phase-9d).
 
 ### `patchMove` and retagging
 

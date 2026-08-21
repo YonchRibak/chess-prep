@@ -44,6 +44,13 @@ export interface RepertoireMove {
   isDropped: boolean;
   /** Phase 9a: explicit line membership, inherited from the parent edge on insert. */
   lineTags: string[];
+  /**
+   * Phase 9d: a refutation shadow line — stored so a miss can be explained,
+   * but never prep. Every consumer (walker, both queue builders, coverage
+   * stats, PGN export) must filter these out; a shadow line that leaks into a
+   * queue would drill the user on a move they chose not to play.
+   */
+  isRefutation: boolean;
 }
 
 export interface RepertoireFull extends RepertoireSummary {
@@ -65,6 +72,7 @@ export interface AddedMove {
   priority: number;
   isDropped: boolean;
   lineTags: string[];
+  isRefutation: boolean;
   childPositionCreated: boolean;
 }
 
@@ -210,6 +218,20 @@ export const api = {
     },
   ): Promise<{ added: number; reused: number; finalFenKey: string }> {
     return request(`/repertoires/${repertoireId}/moves/batch`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /**
+   * Phase 9d: store the engine's punishment of a mistake, from the position
+   * the wrong move reached. Never creates a card — see the API service.
+   */
+  appendRefutation(
+    repertoireId: string,
+    input: { fromFenKey: string; sans: string[] },
+  ): Promise<{ added: number; reused: number; finalFenKey: string }> {
+    return request(`/repertoires/${repertoireId}/refutations`, {
       method: 'POST',
       body: JSON.stringify(input),
     });

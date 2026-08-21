@@ -46,6 +46,7 @@ function move(
     priority: 0,
     isDropped: false,
     lineTags: [],
+    isRefutation: false,
     ...partial,
   } as RepertoireMove;
 }
@@ -369,5 +370,52 @@ describe('walker.pickOpponentReplyForDrill', () => {
     ]);
     const reply = pickOpponentReplyForDrill('p0', indices, cardDueByMoveId);
     expect(reply?.san).toBe('d4');
+  });
+});
+
+/**
+ * Phase 9d. A shadow line lives in the same table as prep, so the only thing
+ * keeping it out of the walk is `isRefutation`. Both failures here are silent:
+ * counted as coverage, the walker stops asking about a position the user never
+ * prepped; counted as a branch, the walk descends into a punishment line.
+ */
+describe('walker — refutation shadow lines', () => {
+  function repWithShadow(): RepertoireFull {
+    return {
+      ...emptyRep(),
+      positions: [
+        { id: 'p0', fenKey: ROOT_KEY, fullFen: ROOT_FEN },
+        { id: 'p1', fenKey: 'k1', fullFen: 'pos b - - 0 1' },
+      ],
+      moves: [
+        move({
+          id: 'shadow',
+          parentPositionId: 'p0',
+          childPositionId: 'p1',
+          san: 'h4',
+          isRefutation: true,
+        }),
+      ],
+    };
+  }
+
+  it('does not count as coverage — the root still needs prep', () => {
+    const rep = repWithShadow();
+    const node = findNextBuildNode(rep, buildIndices(rep));
+    expect(node?.position.fenKey).toBe(ROOT_KEY);
+    expect(node?.kind).toBe('user-prep');
+  });
+
+  it('is excluded from movesByParent but visible in allMovesByParent', () => {
+    const idx = buildIndices(repWithShadow());
+    expect(idx.movesByParent.get('p0') ?? []).toEqual([]);
+    expect((idx.allMovesByParent.get('p0') ?? []).map((m) => m.san)).toEqual(['h4']);
+  });
+
+  it('is counted as neither a live nor a dropped move', () => {
+    const rep = repWithShadow();
+    const cov = computeCoverage(rep, buildIndices(rep));
+    expect(cov.liveMoves).toBe(0);
+    expect(cov.droppedMoves).toBe(0);
   });
 });

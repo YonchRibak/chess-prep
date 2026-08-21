@@ -117,6 +117,10 @@ Move (
   comment, annotation, is_main_line, priority,
   is_dropped,       -- Phase 7: persistent "won't cover"; walker skips it and its subtree
   line_tags[],      -- Phase 9a: line membership, inherited from the parent edge on insert
+  is_refutation,    -- Phase 9d: a shadow line — stored, but prep NOWHERE. No SRS card,
+                    --   no coverage, no drill queue, no PGN export, and it does not hold
+                    --   the one prep slot at a user-turn position. A column, not a tag,
+                    --   because every consumer must exclude it.
   -- DB constraint: uniq_parent_san on (repertoire_id, parent_position_id, san)
   --   — no duplicate SAN from one parent, but DOES allow multiple distinct
   --     children per parent (intentional: opponent branches, AND historically
@@ -393,7 +397,7 @@ Still open (deliberately deferred): merging the three drill implementations
 multi-repertoire walker — see Phase 8a note; classic drill remains reachable
 via the card overflow menu until then.
 
-### Phase 9 — Repertoire growth & line scopes 🚧 in progress (9a, 9b, 9c ✅ done; 9d all but shadow lines)
+### Phase 9 — Repertoire growth & line scopes ✅ done (9a, 9b, 9c, 9d)
 
 Two asks that are one feature: an opening should hold all its branches yet be
 drillable one line at a time, and building should happen *inside* drilling
@@ -428,8 +432,8 @@ Summary:
   scope filtering already runs first, so the two compose for free),
   **interference detection** (the played SAN is the correct prep at a *different*
   position — the common transposition confusion, nearly free from the existing
-  index), and optional refutation shadow lines that are stored but never prep and
-  never carded. The shadow lines are **not built**.
+  index), and refutation shadow lines that are stored but never prep and never
+  carded (`moves.is_refutation`).
 
 Sub-phases: **9a** scopes ✅ **done** — `moves.line_tags` (migration `0005`) with
 inherit-on-insert, `DrillRules.scope`, filtering in `buildDrillQueue` /
@@ -441,11 +445,14 @@ selection policy in `packages/shared` (consumed by the 9c build prompt) ·
 **9c** auto-expand + candidate UI + frontier prefetcher ✅ **done** — opt-in
 `repertoires.auto_expand` (migration `0007`); auto-expansion never re-adds a dropped
 branch and refuses to write from book-ordered candidates (only real frequencies
-authorize a silent write) · **9d** mistake rehearsal 🚧 — `drill_attempts`
+authorize a silent write) · **9d** mistake rehearsal ✅ **done** — `drill_attempts`
 (migration `0008`) written by all three drill implementations and held locally in
 IndexedDB so the mode works offline, the recency-weighted `mistakes` drill mode,
-and interference detection surfaced on every miss. **Refutation shadow lines and
-weakness-steered growth are not built.**
+interference detection surfaced on every miss, and refutation shadow lines
+(`moves.is_refutation`, migration `0009`) stored via `POST
+/repertoires/:id/refutations` — never carded, never counted as coverage, never
+drilled, never exported, and they do not occupy the one prep slot.
+**Weakness-steered growth is not built.**
 
 The 9b fetch/aggregate/frequency-per-fenKey plumbing is the same as Phase 10
 needs, which is why growth now comes before scouting.

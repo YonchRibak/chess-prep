@@ -11,6 +11,7 @@ import { Board } from '../components/Board.tsx';
 import { Btn, Card } from '../components/ui.tsx';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
+import { RefutationPrompt } from '../components/RefutationPrompt.tsx';
 import { getAllCardsLocal, getAttemptsLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import { gradeAndQueue, logAttempt, pullAttempts } from '../lib/srs/sync.ts';
@@ -368,6 +369,14 @@ export function DrillSession() {
                   <p className="text-xs text-amber-300 mt-1">{phase.interference}</p>
                 )}
                 <p className="text-xs text-slate-500 mt-1">Graded Again · next card…</p>
+                {phase.userSan && (
+                  <RefutationPrompt
+                    key={`${item.move.id}:${phase.userSan}`}
+                    repertoireId={active.id}
+                    parentFullFen={item.parentPosition.fullFen}
+                    wrongSan={phase.userSan}
+                  />
+                )}
               </Card>
             )}
           </aside>

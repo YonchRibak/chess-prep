@@ -24,10 +24,10 @@ function makeRep(): RepertoireFull {
       { id: 'p4', fenKey: 'after-Nf3', fullFen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2' },
     ],
     moves: [
-      { id: 'm-e4', parentPositionId: 'p0', childPositionId: 'p1', parentFenKey: 'r0', childFenKey: 'r1', san: 'e4', uci: 'e2e4', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [] },
-      { id: 'm-d4', parentPositionId: 'p0', childPositionId: 'p2', parentFenKey: 'r0', childFenKey: 'r2', san: 'd4', uci: 'd2d4', comment: null, annotation: null, isMainLine: false, priority: 0, isDropped: false, lineTags: [] },
-      { id: 'm-e5', parentPositionId: 'p1', childPositionId: 'p3', parentFenKey: 'r1', childFenKey: 'r3', san: 'e5', uci: 'e7e5', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [] },
-      { id: 'm-Nf3', parentPositionId: 'p3', childPositionId: 'p4', parentFenKey: 'r3', childFenKey: 'r4', san: 'Nf3', uci: 'g1f3', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [] },
+      { id: 'm-e4', parentPositionId: 'p0', childPositionId: 'p1', parentFenKey: 'r0', childFenKey: 'r1', san: 'e4', uci: 'e2e4', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [], isRefutation: false },
+      { id: 'm-d4', parentPositionId: 'p0', childPositionId: 'p2', parentFenKey: 'r0', childFenKey: 'r2', san: 'd4', uci: 'd2d4', comment: null, annotation: null, isMainLine: false, priority: 0, isDropped: false, lineTags: [], isRefutation: false },
+      { id: 'm-e5', parentPositionId: 'p1', childPositionId: 'p3', parentFenKey: 'r1', childFenKey: 'r3', san: 'e5', uci: 'e7e5', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [], isRefutation: false },
+      { id: 'm-Nf3', parentPositionId: 'p3', childPositionId: 'p4', parentFenKey: 'r3', childFenKey: 'r4', san: 'Nf3', uci: 'g1f3', comment: null, annotation: null, isMainLine: true, priority: 0, isDropped: false, lineTags: [], isRefutation: false },
     ],
   };
 }
@@ -395,5 +395,35 @@ describe("buildDrillQueue — 'mistakes' mode (Phase 9d)", () => {
       attempts: [attempt('m-d4', false, 2), attempt('m-Nf3', false, 1)],
     });
     expect(q.map((it) => it.move.san)).toEqual(['d4']);
+  });
+});
+
+/**
+ * Phase 9d. A shadow line should never hold a card — but if one ever does
+ * (a bad backfill, a promotion bug), the queue must still refuse to drill it.
+ * "If a shadow line ever produces an SRS card, the feature is wrong."
+ */
+describe('drill queues — refutation shadow lines', () => {
+  it('never drills a shadow move, even with a card on it', () => {
+    const rep = makeRep();
+    rep.moves.push({
+      id: 'm-shadow',
+      parentPositionId: 'p3',
+      childPositionId: 'p4',
+      parentFenKey: 'r3',
+      childFenKey: 'r4',
+      san: 'Qh5',
+      uci: 'd1h5',
+      comment: null,
+      annotation: null,
+      isMainLine: false,
+      priority: 0,
+      isDropped: false,
+      lineTags: [],
+      isRefutation: true,
+    });
+    const cards = [makeCard('m-e4', -100), makeCard('m-Nf3', -100), makeCard('m-shadow', -1000)];
+    const q = buildDrillQueue({ repertoire: rep, cards, mode: 'due', rules: {}, now: NOW });
+    expect(q.map((it) => it.move.san)).not.toContain('Qh5');
   });
 });

@@ -1,6 +1,6 @@
 # Repertoire growth & line scopes
 
-**Status: 9a, 9b, 9c are BUILT, and 9d is built EXCEPT refutation shadow lines.**
+**Status: 9a, 9b, 9c and 9d are all BUILT.**
 
 - **Line scopes (9a) are shipped** — `moves.line_tags`, `DrillRules.scope`, and the
   filtering in both queue builders and the walker's build seed. The authoritative
@@ -18,8 +18,13 @@
   [srs-drilling](srs-drilling.md#mistake-rehearsal-phase-9d). Note the design below calls
   it a *scope*; it shipped as a `DrillMode` value instead, because scope filtering already
   runs before the mode switch and the two compose for free.
-- **Refutation shadow lines have no column, no module, and no UI**, and neither does using
-  the log to steer growth. Read those parts as intent, not current state.
+- **Refutation shadow lines are shipped** — `moves.is_refutation` (migration `0009`),
+  `appendRefutation`, and the exclusions in every consumer. Authoritative description:
+  [srs-drilling](srs-drilling.md#refutation-shadow-lines-phase-9d). The design below
+  leaves the tag-vs-column choice open; it shipped as a **column**, for the reason given
+  there.
+- **Using the log to steer growth has no code.** Read that part as intent, not current
+  state.
 
 See [roadmap](../06-workflows/roadmap.md) and PROJECT_SPEC §5.
 
@@ -186,12 +191,13 @@ uniformly.
 | `line_tags text[] not null default '{}'` | `moves` | ✅ applied, migration `0005_line_tags`. Inherited on insert |
 | new `explorer_entries` | — | ✅ applied, migration `0006_explorer_entries`. Cache; safe to truncate |
 | new `drill_attempts` | — | ✅ applied, migration `0008_drill_attempts`. Append-only; cascades from `moves` |
+| `is_refutation boolean not null default false` | `moves` | ✅ applied, migration `0009_refutations`. Shadow lines — stored, never prep |
 | `scope` field | `repertoires.drill_rules` (jsonb) | ✅ shipped. Partial, via `mergeDrillRules()`; validated on write by `parseLineScope` |
 
-Refutation shadow lines need a marker on `moves` distinguishing them from prep — either a
-value in `line_tags` or a dedicated column. Prefer a dedicated column if the walker,
-queue builder, and export all need to exclude them, since a tag that *must* be checked
-everywhere is an invariant with no enforcement.
+Refutation shadow lines needed a marker on `moves` distinguishing them from prep. It
+shipped as a **dedicated column** (`is_refutation`), not a `line_tags` value: the walker,
+both queue builders, interference, path naming, stats and export all have to exclude
+them, and a tag that *must* be checked everywhere is an invariant with no enforcement.
 
 Interaction with the v2 `option_label` idea
 ([data-model](../02-architecture/data-model.md#v2-shape-to-avoid-painting-into-a-corner)):
@@ -206,7 +212,7 @@ one prep row per `(user, parent_position)` beyond the existing constraint.
 | **9a** ✅ | `line_tags` + inherit-on-insert; derived opening-name scope; `DrillRules.scope` + picker | Request 1, entirely — no network |
 | **9b** ✅ | `explorer_entries` + Lichess explorer client; candidate ranking in `packages/shared` — see [explorer](explorer.md) | The supply side of request 2 |
 | **9c** ✅ | Opponent auto-expand; ranked candidate UI in the build phase; frontier prefetcher | Request 2 — the seamless part |
-| **9d** 🚧 | `drill_attempts` ✅; `mistakes` mode ✅; interference detection ✅; refutation shadow lines ⏸ | Mistake rehearsal |
+| **9d** ✅ | `drill_attempts` ✅; `mistakes` mode ✅; interference detection ✅; refutation shadow lines ✅ (weakness-steered growth ⏸) | Mistake rehearsal |
 
 9a is independently valuable and touches no network or new data source — ship it alone.
 

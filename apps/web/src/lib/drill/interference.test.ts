@@ -54,6 +54,7 @@ function move(
     priority: 0,
     isDropped: false,
     lineTags: [],
+    isRefutation: false,
     ...extra,
   };
 }
@@ -80,6 +81,14 @@ describe('detectInterference', () => {
   it('ignores dropped branches', () => {
     const rep = makeRep();
     rep.moves = rep.moves.map((m) => (m.id === 'm-e4' ? { ...m, isDropped: true } : m));
+    expect(detectInterference(rep, 'p3', 'e4')).toEqual([]);
+  });
+
+  // Phase 9d: a shadow line is a move the user played BY MISTAKE. Reporting it
+  // back as "that's your prep elsewhere" would confirm the error.
+  it('ignores refutation shadow lines', () => {
+    const rep = makeRep();
+    rep.moves = rep.moves.map((m) => (m.id === 'm-e4' ? { ...m, isRefutation: true } : m));
     expect(detectInterference(rep, 'p3', 'e4')).toEqual([]);
   });
 

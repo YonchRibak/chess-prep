@@ -56,6 +56,7 @@ import { selectAutoExpandSans } from '../lib/walker/autoExpand.ts';
 import { warmFrontier } from '../lib/openings/prefetch.ts';
 import { gradeAndQueue, logAttempt } from '../lib/srs/sync.ts';
 import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
+import { RefutationPrompt } from '../components/RefutationPrompt.tsx';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import { useEngine } from '../lib/engine/useEngine.ts';
@@ -85,6 +86,8 @@ type Phase =
       card: SrsCardDto;
       move: RepertoireMove;
       userSan: string;
+      /** The position the mistake was made in — the refutation's starting point. */
+      parentFullFen: string;
       /**
        * reveal: the correct move is briefly shown on the board (not movable).
        * retry: the user must physically play the correct move to continue —
@@ -484,10 +487,13 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
       fenTurn(node.position.fullFen),
       [],
     );
-    // Pass ALL moves at this parent, dropped included — that is the filter.
+    // Pass ALL moves at this parent — dropped and Phase 9d shadow lines
+    // included, which is why this reads `allMovesByParent`. A SAN that already
+    // exists as a shadow edge must not be proposed: adding it would be a prep
+    // write onto that edge, silently promoting a punishment line to prep.
     // `source` blocks the write when the list is the book's alphabetical order
     // rather than real frequencies.
-    const existing = idx.movesByParent.get(node.position.id) ?? [];
+    const existing = idx.allMovesByParent.get(node.position.id) ?? [];
     const decision = selectAutoExpandSans(replies, existing, { source });
     if (decision.sans.length === 0) return 0;
 
@@ -728,6 +734,7 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
       card: it.card,
       move: it.move,
       userSan,
+      parentFullFen: it.parentPosition.fullFen,
       stage: 'reveal',
       interference,
     });
@@ -739,6 +746,7 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
       card: it.card,
       move: it.move,
       userSan,
+      parentFullFen: it.parentPosition.fullFen,
       stage: 'retry',
       interference,
     });
@@ -1054,6 +1062,12 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
                     ? 'Graded Again — watch the correct move…'
                     : `Now play ${phase.move.san} yourself to continue.`}
                 </p>
+                <RefutationPrompt
+                  key={`${phase.move.id}:${phase.userSan}`}
+                  repertoireId={active.id}
+                  parentFullFen={phase.parentFullFen}
+                  wrongSan={phase.userSan}
+                />
               </Card>
             )}
 

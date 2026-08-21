@@ -3,7 +3,7 @@
 Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
 `0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`,
-`0007_auto_expand`, `0008_drill_attempts`.
+`0007_auto_expand`, `0008_drill_attempts`, `0009_refutations`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -30,7 +30,7 @@ read it through `mergeDrillRules()` rather than assuming fields exist.
 ### `moves`
 The edge, and the unit of prep:
 `repertoire_id`, `parent_position_id`, `child_position_id`, `san`, `uci`, `comment`,
-`annotation`, `is_main_line`, `priority`, `is_dropped`, `line_tags[]`.
+`annotation`, `is_main_line`, `priority`, `is_dropped`, `line_tags[]`, `is_refutation`.
 
 Unique `uniq_parent_san (repertoire_id, parent_position_id, san)` — no duplicate SAN
 from one parent, but **multiple distinct children per parent are intentionally allowed**
@@ -51,6 +51,14 @@ inheritance a move added under a tagged branch point would be born untagged and 
 vanish from a tag-scoped session — a session that looks complete and isn't. Retagging an
 existing edge therefore cascades over its subtree (`retagSubtree`). See
 [srs-drilling](../03-domain/srs-drilling.md#line-scopes-phase-9a).
+
+`is_refutation` (migration `0009`, Phase 9d) marks a **shadow line**: the engine's
+punishment of a move the user played by mistake. Stored, but prep nowhere — no SRS card,
+no coverage, no queue, no export, and it does not occupy the one prep slot at a user-turn
+position. It is a column rather than a `line_tags` value because *every* consumer has to
+exclude it, and a forgotten tag check turns a punishment line into a drilled card
+silently. Full list of exclusions:
+[srs-drilling](../03-domain/srs-drilling.md#refutation-shadow-lines-phase-9d).
 
 ### `srs_cards`
 One card per prep move. Stores raw FSRS state — `due`, `stability`, `difficulty`,

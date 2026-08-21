@@ -84,6 +84,14 @@ export const moves = pgTable(
     // an untagged move under a tagged branch point would silently drop out of
     // a tag-scoped session. See packages/shared/src/scope.ts.
     lineTags: text('line_tags').array().notNull().default([]),
+    // Phase 9d: a refutation shadow line — the engine's punishment of a move
+    // the user played by mistake. Stored so it can be shown, but it is NOT
+    // prep: no SRS card is ever created for it, the walker's build seed never
+    // treats it as coverage, neither queue builder drills it, and PGN export
+    // omits it. A dedicated column rather than a `line_tags` value precisely
+    // because every one of those call sites must exclude it — an invariant
+    // carried by a tag would fail silently the first time one forgot.
+    isRefutation: boolean('is_refutation').notNull().default(false),
   },
   (t) => [unique('uniq_parent_san').on(t.repertoireId, t.parentPositionId, t.san)],
 );

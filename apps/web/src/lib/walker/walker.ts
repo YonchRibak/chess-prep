@@ -25,23 +25,41 @@ import { buildDeepestOpeningIndex, type OpeningLookup } from '../openings/pathNa
 export interface WalkerIndices {
   positionByKey: Map<string, RepertoirePosition>;
   positionById: Map<string, RepertoirePosition>;
+  /**
+   * Prep edges only. Phase 9d refutation shadow lines are **excluded here**, at
+   * the single choke point every walker consumer goes through, rather than at
+   * each of the dozen `.filter(!isDropped)` sites — a shadow line counted as
+   * coverage would make a position look prepped when it isn't, and the walker
+   * would silently stop asking about it.
+   */
   movesByParent: Map<string, RepertoireMove[]>;
+  /**
+   * Every edge, shadow lines included. Used only where the question is "does
+   * this SAN already exist here?" — auto-expansion must see shadow edges so it
+   * never proposes a SAN that would collide with (and silently promote) one.
+   */
+  allMovesByParent: Map<string, RepertoireMove[]>;
 }
 
 export function buildIndices(rep: RepertoireFull): WalkerIndices {
   const positionByKey = new Map<string, RepertoirePosition>();
   const positionById = new Map<string, RepertoirePosition>();
   const movesByParent = new Map<string, RepertoireMove[]>();
+  const allMovesByParent = new Map<string, RepertoireMove[]>();
   for (const p of rep.positions) {
     positionByKey.set(p.fenKey, p);
     positionById.set(p.id, p);
   }
   for (const m of rep.moves) {
+    const all = allMovesByParent.get(m.parentPositionId) ?? [];
+    all.push(m);
+    allMovesByParent.set(m.parentPositionId, all);
+    if (m.isRefutation) continue;
     const arr = movesByParent.get(m.parentPositionId) ?? [];
     arr.push(m);
     movesByParent.set(m.parentPositionId, arr);
   }
-  return { positionByKey, positionById, movesByParent };
+  return { positionByKey, positionById, movesByParent, allMovesByParent };
 }
 
 export type WalkerNodeKind = 'user-prep' | 'opponent-picks';
@@ -253,8 +271,11 @@ export function computeCoverage(rep: RepertoireFull, indices: WalkerIndices): Co
     if (liveOut.length > 0) inFlight++;
     else uncovered++;
   }
-  const liveMoves = rep.moves.filter((m) => !m.isDropped).length;
-  const droppedMoves = rep.moves.length - liveMoves;
+  // Shadow lines are not part of the repertoire's size in either direction —
+  // they are neither covered prep nor a branch the user declined.
+  const prepMoves = rep.moves.filter((m) => !m.isRefutation);
+  const liveMoves = prepMoves.filter((m) => !m.isDropped).length;
+  const droppedMoves = prepMoves.length - liveMoves;
   return {
     totalPositions: reachable.size,
     inFlight,

@@ -4,6 +4,7 @@ import {
   HttpError,
   addMove,
   appendLine,
+  appendRefutation,
   createRepertoire,
   deleteMove,
   deleteRepertoire,
@@ -74,6 +75,17 @@ repertoireRoutes.post('/:id/moves/batch', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
   const result = await safeJson(() => appendLine(userId(), id, body));
+  if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404 | 500);
+  return c.json(result.data, 201);
+});
+
+// Phase 9d: store a refutation shadow line. Separate from /moves/batch on
+// purpose — the two write the same table but mean opposite things, and a
+// boolean on the prep endpoint would make "never carded" one typo away.
+repertoireRoutes.post('/:id/refutations', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const result = await safeJson(() => appendRefutation(userId(), id, body));
   if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404 | 500);
   return c.json(result.data, 201);
 });

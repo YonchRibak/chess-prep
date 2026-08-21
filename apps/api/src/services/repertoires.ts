@@ -5,6 +5,7 @@ import {
   fenTurn,
   inheritLineTags,
   isUserMove,
+  MAX_REFUTATION_PLIES,
   parseLineScope,
   pgnToTree,
   treeToPgn,
@@ -58,6 +59,7 @@ export interface RepertoireFull extends RepertoireSummary {
     priority: number;
     isDropped: boolean;
     lineTags: string[];
+    isRefutation: boolean;
   }[];
 }
 
@@ -181,6 +183,7 @@ export async function getRepertoire(userId: string, id: string): Promise<Reperto
       priority: m.priority,
       isDropped: m.isDropped,
       lineTags: m.lineTags,
+      isRefutation: m.isRefutation,
     })),
   };
 }
@@ -233,6 +236,7 @@ export interface AddedMove {
   annotation: string | null;
   isDropped: boolean;
   lineTags: string[];
+  isRefutation: boolean;
   /** True if this call also created a new position node (vs. linking to existing). */
   childPositionCreated: boolean;
 }
@@ -340,6 +344,13 @@ export async function addMove(
         ),
       });
       if (!moveRow) throw new HttpError(500, 'Move insert+fetch race');
+      // Adding a move by hand is always a prep write, so a shadow edge here is
+      // being promoted (see promoteIfShadowed).
+      moveRow = await promoteIfShadowed(tx, moveRow, false, {
+        userId,
+        color: rep.color as Color,
+        parentFullFen: parent.fullFen,
+      });
     }
 
     // 7. Auto-create an SRS card if this move is one the user plays.
@@ -371,6 +382,7 @@ export async function addMove(
       annotation: moveRow.annotation,
       isDropped: moveRow.isDropped,
       lineTags: moveRow.lineTags,
+      isRefutation: moveRow.isRefutation,
       childPositionCreated,
     };
   });
@@ -430,6 +442,68 @@ export async function appendLine(
 
     if (result.added > 0) {
       await tx.update(repertoires).set({ updatedAt: new Date() }).where(eq(repertoires.id, repertoireId));
+    }
+    return result;
+  });
+}
+
+/**
+ * Phase 9d: store a refutation shadow line — the engine's punishment of a move
+ * the user played by mistake, a few plies deep, starting from the position the
+ * mistake was made in.
+ *
+ * The whole point of the feature is what it does *not* do: no SRS card is
+ * created for any move it inserts, the one-prep invariant is neither consulted
+ * nor enforced, and every consumer (walker build seed, both queue builders,
+ * PGN export) filters `isRefutation` out. If a shadow line ever produces a
+ * card, this feature is wrong — see the test in repertoires.invariant.test.ts.
+ *
+ * Idempotent like `appendLine`: re-saving the same refutation reuses its edges.
+ * Existing prep edges along the path are reused **as prep** and never demoted.
+ */
+export async function appendRefutation(
+  userId: string,
+  repertoireId: string,
+  input: { fromFenKey: unknown; sans: unknown },
+): Promise<{ added: number; reused: number; finalFenKey: string }> {
+  if (typeof input.fromFenKey !== 'string') throw new HttpError(400, 'fromFenKey is required');
+  if (!Array.isArray(input.sans) || input.sans.some((s) => typeof s !== 'string')) {
+    throw new HttpError(400, 'sans must be an array of strings');
+  }
+  const sans = input.sans as string[];
+  if (sans.length === 0) throw new HttpError(400, 'sans must not be empty');
+  if (sans.length > MAX_REFUTATION_PLIES) {
+    throw new HttpError(400, `A refutation is at most ${MAX_REFUTATION_PLIES} plies`);
+  }
+
+  return await db.transaction(async (tx) => {
+    const rep = await tx.query.repertoires.findFirst({
+      where: and(eq(repertoires.id, repertoireId), eq(repertoires.userId, userId)),
+    });
+    if (!rep) throw new HttpError(404, 'Repertoire not found');
+
+    const initial = await tx.query.positions.findFirst({
+      where: and(
+        eq(positions.repertoireId, repertoireId),
+        eq(positions.fenKey, input.fromFenKey as string),
+      ),
+    });
+    if (!initial) throw new HttpError(400, 'fromFenKey is not in this repertoire');
+
+    const result = await appendLineCore(tx, {
+      userId,
+      repertoire: { id: rep.id, color: rep.color as Color },
+      fromPosition: { id: initial.id, fenKey: initial.fenKey, fullFen: initial.fullFen },
+      sans,
+      onConflict: 'refuse',
+      isRefutation: true,
+    });
+
+    if (result.added > 0) {
+      await tx
+        .update(repertoires)
+        .set({ updatedAt: new Date() })
+        .where(eq(repertoires.id, repertoireId));
     }
     return result;
   });
@@ -662,16 +736,21 @@ export async function exportPgn(userId: string, repertoireId: string): Promise<s
     rootFenKey: full.rootFenKey as FenKey,
     rootFullFen: full.rootFullFen,
     positions: full.positions.map((p) => ({ fenKey: p.fenKey as FenKey, fullFen: p.fullFen })),
-    moves: full.moves.map<TreeMoveInput>((m) => ({
-      parentFenKey: m.parentFenKey as FenKey,
-      childFenKey: m.childFenKey as FenKey,
-      san: m.san,
-      uci: m.uci,
-      comment: m.comment,
-      annotation: m.annotation,
-      isMainLine: m.isMainLine,
-      priority: m.priority,
-    })),
+    // Phase 9d: shadow lines are the engine's punishment of *mistakes*, not
+    // prep — exporting them would put moves the user never intends to play
+    // into their PGN, and a re-import would turn them into real branches.
+    moves: full.moves
+      .filter((m) => !m.isRefutation)
+      .map<TreeMoveInput>((m) => ({
+        parentFenKey: m.parentFenKey as FenKey,
+        childFenKey: m.childFenKey as FenKey,
+        san: m.san,
+        uci: m.uci,
+        comment: m.comment,
+        annotation: m.annotation,
+        isMainLine: m.isMainLine,
+        priority: m.priority,
+      })),
   };
   return treeToPgn(tree, {
     headers: {
@@ -729,6 +808,10 @@ async function enforceOnePrepPerUserPosition(
       eq(moves.repertoireId, repertoireId),
       eq(moves.parentPositionId, parentPositionId),
       ne(moves.san, newSan),
+      // Phase 9d: a refutation shadow line is not prep and never holds the one
+      // prep slot. Counting one here would 409 the user out of prepping a
+      // position simply because they once played the wrong move there.
+      eq(moves.isRefutation, false),
     ),
   });
   if (!conflicting) return;
@@ -741,6 +824,33 @@ async function enforceOnePrepPerUserPosition(
   }
   // swap: cascade drops the old SrsCard so the new move starts FSRS state=new
   await tx.delete(moves).where(eq(moves.id, conflicting.id));
+}
+
+/**
+ * Phase 9d: a prep write that lands on an existing refutation shadow edge
+ * promotes it to real prep — and, where it is the user's turn, gives it the
+ * SRS card it was denied while it was only a shadow.
+ *
+ * The asymmetry is deliberate. Shadow → prep is a decision the user just made
+ * ("that punishment line is actually what I want to play"); prep → shadow would
+ * silently strip a card the user has SRS history on, so a refutation walk that
+ * crosses existing prep leaves it untouched.
+ */
+async function promoteIfShadowed<T extends { id: string; isRefutation: boolean }>(
+  tx: Tx,
+  moveRow: T,
+  writingAsRefutation: boolean,
+  prep: { userId: string; color: Color; parentFullFen: string },
+): Promise<T> {
+  if (writingAsRefutation || !moveRow.isRefutation) return moveRow;
+  await tx.update(moves).set({ isRefutation: false }).where(eq(moves.id, moveRow.id));
+  if (isUserMove(fenTurn(prep.parentFullFen), prep.color)) {
+    await tx
+      .insert(srsCards)
+      .values({ userId: prep.userId, moveId: moveRow.id, due: new Date() })
+      .onConflictDoNothing();
+  }
+  return { ...moveRow, isRefutation: false };
 }
 
 /**
@@ -834,6 +944,13 @@ interface AppendLineCoreParams {
    * keeps the branch's tags without the caller having to know them.
    */
   lineTags?: string[];
+  /**
+   * Phase 9d: insert this line as a refutation shadow line — stored, but never
+   * prep. No SRS card is created for any move in it (not even where it is the
+   * user's turn), and the one-prep-per-user-position invariant does not apply,
+   * because a refutation is not a prep move competing for that slot.
+   */
+  isRefutation?: boolean;
 }
 
 /**
@@ -890,7 +1007,9 @@ async function appendLineCore(
       child = created;
     }
 
-    const isUserSidePrep = isUserMove(fenTurn(cursor.fullFen), params.repertoire.color);
+    const asRefutation = params.isRefutation === true;
+    const isUserSidePrep =
+      !asRefutation && isUserMove(fenTurn(cursor.fullFen), params.repertoire.color);
     if (isUserSidePrep) {
       await enforceOnePrepPerUserPosition(
         tx,
@@ -913,6 +1032,7 @@ async function appendLineCore(
         isMainLine: false,
         priority: 0,
         lineTags: inheritedTags,
+        isRefutation: asRefutation,
       })
       .onConflictDoNothing()
       .returning();
@@ -928,6 +1048,14 @@ async function appendLineCore(
         ),
       });
       if (!moveRow) throw new HttpError(500, 'Move insert+fetch race');
+      // Promotion is one-way: a real prep write over an existing shadow edge
+      // makes it prep (the user decided to actually play it, so it must get a
+      // card below), but a refutation walk over existing prep never demotes it.
+      moveRow = await promoteIfShadowed(tx, moveRow, asRefutation, {
+        userId: params.userId,
+        color: params.repertoire.color,
+        parentFullFen: cursor.fullFen,
+      });
     } else {
       added++;
       if (isUserSidePrep) {
@@ -975,6 +1103,7 @@ async function getRepertoireWithTx(tx: Tx, userId: string, id: string): Promise<
       priority: m.priority,
       isDropped: m.isDropped,
       lineTags: m.lineTags,
+      isRefutation: m.isRefutation,
     })),
   };
 }

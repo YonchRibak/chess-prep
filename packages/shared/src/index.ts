@@ -5,5 +5,6 @@ export * from './explorer.js';
 export * from './fen.js';
 export * from './openings.js';
 export * from './pgn.js';
+export * from './refutation.js';
 export * from './scope.js';
 export * from './types.js';

@@ -57,6 +57,16 @@ cannot leak eval into a drill running in another route or tab. `useEngine` takes
 `engine.test.ts` asserts that a gated `analyze()` emits **only** `stop` and never `go`.
 Do not weaken that test.
 
+**One named exemption (Phase 9d):** `AnalyzeOptions.bypassGate` runs a single analysis
+while the gate stays closed for everyone else. It exists for refutation shadow lines,
+which need an eval *during* a drill — but of the position the user reached by playing the
+**wrong** move, which is not the card's position and holds no answer to leak. It is an
+exemption rather than a `setGated(false)` / `setGated(true)` sandwich precisely because
+the gate is process-wide: toggling it would open a real window for every other consumer.
+Its only caller is
+[RefutationPrompt](../../apps/web/src/components/RefutationPrompt.tsx). Do not add a
+second one without the same argument.
+
 ### Who gates what
 
 | Surface | Engine |
