@@ -12,13 +12,15 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [openings.test.ts](../../packages/shared/src/openings.test.ts) | Importer/lookup normalization parity (pure-logic half) |
 | [pgn.test.ts](../../packages/shared/src/pgn.test.ts) | PGN round-trip: variations, NAGs, comments |
 | [explorer.test.ts](../../packages/shared/src/explorer.test.ts) | Phase 9b candidate policy: frequency cutoffs and the reply cap (what stops auto-expansion exploding the frontier), that a popular move the engine dislikes is never promoted, that no explorer data degrades to plain engine order, and that thin samples score `null` rather than 100% |
+| [attempts.test.ts](../../packages/shared/src/attempts.test.ts) | Phase 9d: mistake ranking — recency ordering, the window cutoff, that a move only ever answered correctly is never ranked, and that correct answers demote a **repaired** mistake below a fresh one (without this the mode becomes a permanent hall of shame); plus interference never reporting the current position or an unprepped SAN |
 | [scope.test.ts](../../packages/shared/src/scope.test.ts) | Phase 9a: opening-name boundary matching, tag matching, tag inheritance (replace vs inherit vs clear), `parseLineScope` validation, and that a malformed scope degrades to "no filter" rather than "no cards" |
 
 ### apps/web — pure logic, no DOM
 | File | Guards |
 |---|---|
 | [walker.test.ts](../../apps/web/src/lib/walker/walker.test.ts) | BFS round-robin order, dropped-subtree skipping, coverage stats; scoped building stays inside its line and returns `null` rather than escaping it |
-| [queue.test.ts](../../apps/web/src/lib/drill/queue.test.ts) | Drill queue per mode + rules; daily-diet interleaving and the new-card cap; line scopes — including that an `openingName` scope with **no** name lookup yields an empty queue (fail closed), and that a rule-filtered *user* move is never auto-played as an opponent reply in walkthrough |
+| [queue.test.ts](../../apps/web/src/lib/drill/queue.test.ts) | Drill queue per mode + rules; daily-diet interleaving and the new-card cap; line scopes — including that an `openingName` scope with **no** name lookup yields an empty queue (fail closed); Phase 9d `mistakes` mode ordering, that it ignores the due date, that it fails closed with no attempt log, and that it composes with a line scope; and that a rule-filtered *user* move is never auto-played as an opponent reply in walkthrough |
+| [interference.test.ts](../../apps/web/src/lib/drill/interference.test.ts) | Phase 9d: that interference reports only **user-side, non-dropped** preps at a *different* position — the two exclusions that keep the hint from being false — and the message phrasing with and without a book name |
 | [autoExpand.test.ts](../../apps/web/src/lib/walker/autoExpand.test.ts) | Phase 9c: that auto-expansion **never re-adds a dropped branch**, never writes from book-ordered (alphabetical) candidates, and stays capped |
 | [candidates.test.ts](../../apps/web/src/lib/openings/candidates.test.ts) | UCI→SAN conversion at the engine boundary, dropping stale/illegal lines, and that book rows carry no fake 0% frequency |
 | [scheduler.test.ts](../../apps/web/src/lib/srs/scheduler.test.ts) | FSRS DTO ↔ card conversion and grading |

@@ -7,16 +7,20 @@
  *
  * Offline-safe: failures leave items in the queue for next online pass.
  */
-import type { SrsCardDto } from '@chess-prep/shared';
+import type { DrillAttemptDto, SrsCardDto } from '@chess-prep/shared';
 import { applyGrade } from './scheduler.ts';
 import type { Grade } from '@chess-prep/shared';
 import {
+  clearAttemptQueueEntries,
   clearPushQueueEntries,
+  drainAttemptQueue,
   drainPushQueue,
   enqueuePush,
   getMeta,
+  mergeAttemptsLocal,
   mergeCardsLocal,
   putCardLocal,
+  recordAttemptLocal,
   setMeta,
 } from '../idb/schema.ts';
 
@@ -101,10 +105,80 @@ export async function flushQueue(): Promise<{ pushed: number; remaining: number 
   return { pushed: data.accepted + data.ignored, remaining: 0 };
 }
 
+/* ---------------- Phase 9d: the drill-attempt log ---------------- */
+
+interface AttemptPullResponse {
+  attempts: DrillAttemptDto[];
+  serverTime: string;
+}
+
+/**
+ * Log one answered card. Fire-and-forget by design: an attempt is telemetry for
+ * the mistakes mode, and failing a drill because the log write failed would
+ * trade a real feature for a bookkeeping one.
+ */
+export async function logAttempt(args: {
+  moveId: string;
+  repertoireId: string;
+  playedSan: string;
+  wasCorrect: boolean;
+  at?: Date;
+}): Promise<void> {
+  const attempt: DrillAttemptDto = {
+    id: crypto.randomUUID(),
+    moveId: args.moveId,
+    repertoireId: args.repertoireId,
+    playedSan: args.playedSan,
+    wasCorrect: args.wasCorrect,
+    at: (args.at ?? new Date()).toISOString(),
+  };
+  await recordAttemptLocal(attempt);
+  void flushAttempts().catch(() => {
+    /* swallow — the queue keeps the attempt for the next pass */
+  });
+}
+
+/** Append queued attempts on the server. Safe to call repeatedly. */
+export async function flushAttempts(): Promise<{ pushed: number; remaining: number }> {
+  const queued = await drainAttemptQueue();
+  if (queued.length === 0) return { pushed: 0, remaining: 0 };
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/srs/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attempts: queued }),
+    });
+  } catch {
+    return { pushed: 0, remaining: queued.length };
+  }
+  if (!res.ok) return { pushed: 0, remaining: queued.length };
+  await clearAttemptQueueEntries(queued.map((a) => a.id));
+  return { pushed: queued.length, remaining: 0 };
+}
+
+/**
+ * Pull the server's attempt log for a repertoire into IndexedDB.
+ *
+ * Only ever *adds* to the local log — the local copy is the one the mistakes
+ * mode reads, and it must stay usable when this call fails.
+ */
+export async function pullAttempts(repertoireId?: string, since?: Date): Promise<number> {
+  const url = new URL(`${BASE_URL}/srs/attempts`);
+  if (repertoireId) url.searchParams.set('repertoireId', repertoireId);
+  if (since) url.searchParams.set('since', since.toISOString());
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`attempt pull failed: ${res.status}`);
+  const data = (await res.json()) as AttemptPullResponse;
+  await mergeAttemptsLocal(data.attempts);
+  return data.attempts.length;
+}
+
 /** Listen for online events and flush the queue. */
 export function attachOnlineFlush(): () => void {
   const handler = () => {
     void flushQueue();
+    void flushAttempts();
   };
   window.addEventListener('online', handler);
   return () => window.removeEventListener('online', handler);

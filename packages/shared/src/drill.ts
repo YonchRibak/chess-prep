@@ -42,7 +42,13 @@ export interface SrsCardDto {
   updatedAt: string;
 }
 
-export type DrillMode = 'due' | 'walkthrough' | 'weak' | 'random';
+/**
+ * `mistakes` (Phase 9d) is deliberately separate from `weak`: `weak` keys off
+ * FSRS stability/lapses and has no notion of *when*, so a move fumbled a year
+ * ago outranks one missed this morning. `mistakes` reads the attempt log and is
+ * recency-weighted. Both compose with `DrillRules.scope`.
+ */
+export type DrillMode = 'due' | 'walkthrough' | 'weak' | 'random' | 'mistakes';
 
 export interface DrillRules {
   /** Skip cards with depth-from-root less than this (in plies). */

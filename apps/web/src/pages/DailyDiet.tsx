@@ -21,6 +21,7 @@ import { Chess } from 'chess.js';
 import {
   Grade,
   type Color,
+  type OpeningId,
 } from '@chess-prep/shared';
 import { useAppStore } from '../store/app.ts';
 import { useChessRules } from '../lib/chess/useChessRules.ts';
@@ -31,7 +32,8 @@ import { MoveLine } from '../components/MoveLine.tsx';
 import { api, type RepertoireFull, type UserSettings } from '../api/client.ts';
 import { getAllCardsLocal, putRepertoireLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
-import { gradeAndQueue } from '../lib/srs/sync.ts';
+import { gradeAndQueue, logAttempt } from '../lib/srs/sync.ts';
+import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
 import { buildDailyDietQueue, type DailyDietItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import {
@@ -48,7 +50,13 @@ type Phase =
   | { kind: 'setup' }
   | { kind: 'prompt'; index: number }
   | { kind: 'correct'; index: number }
-  | { kind: 'wrong'; index: number; userSan: string; stage: 'reveal' | 'retry' }
+  | {
+      kind: 'wrong';
+      index: number;
+      userSan: string;
+      stage: 'reveal' | 'retry';
+      interference?: string;
+    }
   | { kind: 'complete' };
 
 const CORRECT_PAUSE_MS = 300;
@@ -87,6 +95,9 @@ export function DailyDiet() {
   const repsRef = useRef<Map<string, { rep: RepertoireFull; indices: WalkerIndices }>>(
     new Map(),
   );
+
+  /** Phase 9d: only read by the wrong-answer handler, so it stays out of state. */
+  const openingLookupRef = useRef<((fenKey: string) => OpeningId | null) | undefined>(undefined);
 
   /** Load the board at the item's parent position by replaying from the root. */
   function loadTo(it: DailyDietItem) {
@@ -146,6 +157,7 @@ export function DailyDiet() {
     // Phase 9a: per-repertoire line scopes apply to the diet too, so a scoped
     // repertoire contributes only its scoped cards.
     const names = await ensureOpeningNames(fulls);
+    openingLookupRef.current = openingNameLookup(names);
     const q = buildDailyDietQueue({
       repertoires: fulls,
       cards,
@@ -236,6 +248,12 @@ export function DailyDiet() {
         setStats((s) => ({ ...s, correct: s.correct + 1 }));
         recordPerOpening(it.repertoireName, 'correct');
         void gradeAndQueue(it.card, Grade.Good);
+        void logAttempt({
+          moveId: it.move.id,
+          repertoireId: it.repertoireId,
+          playedSan: it.move.san,
+          wasCorrect: true,
+        });
         await sleep(CORRECT_PAUSE_MS, ctl.signal);
         advanceTo(idx + 1);
       } else {
@@ -243,13 +261,33 @@ export function DailyDiet() {
         setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
         recordPerOpening(it.repertoireName, 'wrong');
         void gradeAndQueue(it.card, Grade.Again);
+        void logAttempt({
+          moveId: it.move.id,
+          repertoireId: it.repertoireId,
+          playedSan: san,
+          wasCorrect: false,
+        });
+        // Phase 9d: interference is scoped to the card's OWN repertoire — the
+        // same SAN being prep in a different repertoire (often the other color)
+        // is not the transposition confusion this names.
+        const ownRep = repsRef.current.get(it.repertoireId)?.rep;
+        const interference = ownRep
+          ? describeInterference(
+              detectInterference(
+                ownRep,
+                it.parentPosition.id,
+                san,
+                openingLookupRef.current,
+              ),
+            ) ?? undefined
+          : undefined;
         // Briefly SHOW the correct move, take it back, then require the user
         // to play it themselves before moving on.
-        setPhase({ kind: 'wrong', index: idx, userSan: san, stage: 'reveal' });
+        setPhase({ kind: 'wrong', index: idx, userSan: san, stage: 'reveal', interference });
         rules.playSan(it.move.san);
         await sleep(WRONG_REVEAL_MS, ctl.signal);
         rules.undo();
-        setPhase({ kind: 'wrong', index: idx, userSan: san, stage: 'retry' });
+        setPhase({ kind: 'wrong', index: idx, userSan: san, stage: 'retry', interference });
       }
     } catch {
       /* aborted */
@@ -401,6 +439,9 @@ export function DailyDiet() {
                 <p className="text-xs text-slate-400 mt-1">
                   You played: <span className="font-mono">{phase.userSan}</span>
                 </p>
+                {phase.interference && (
+                  <p className="text-xs text-amber-300 mt-1">{phase.interference}</p>
+                )}
                 <p className="text-xs text-slate-500 mt-1">
                   {phase.stage === 'reveal'
                     ? 'Graded Again — watch the correct move…'

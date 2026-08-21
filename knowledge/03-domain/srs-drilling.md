@@ -72,12 +72,12 @@ A tag scope needs no network at all.
 [apps/web/src/lib/drill/queue.ts](../../apps/web/src/lib/drill/queue.ts) ·
 [tests](../../apps/web/src/lib/drill/queue.test.ts)
 
-`buildDrillQueue({ repertoire, cards, mode, rules, now?, rng?, openingLookup? })` →
-`DrillItem[]`.
+`buildDrillQueue({ repertoire, cards, mode, rules, now?, rng?, openingLookup?, attempts? })`
+→ `DrillItem[]`.
 Each item carries the `card`, the `move`, its `parentPosition`, `depth`, and optionally
 `opponentResponseSan`. `now` and `rng` are injected so tests are deterministic.
 
-Four modes (`DrillMode`):
+Five modes (`DrillMode`):
 
 | Mode | Selection |
 |---|---|
@@ -85,8 +85,14 @@ Four modes (`DrillMode`):
 | `walkthrough` | Sequential traversal of the line; carries `opponentResponseSan` |
 | `weak` | Weak-spot targeting (high lapses / low stability) |
 | `random` | Shuffled, via the injected `rng` |
+| `mistakes` | Phase 9d: recency-weighted actual misses from the attempt log |
 
 Dropped moves are excluded everywhere.
+
+Two inputs fail **closed** rather than open, for the same reason: a session that silently
+widens to the whole tree is indistinguishable from a correct one until the user notices
+they're drilling the wrong thing. Omitting `openingLookup` under an `openingName` scope
+yields an empty queue; omitting `attempts` under `mode: 'mistakes'` does too.
 
 ## Flow mode
 
@@ -120,6 +126,39 @@ can't double-count. See [services/userSettings.ts](../../apps/api/src/services/u
 
 The end screen breaks accuracy down per repertoire, so the day's weakest opening is
 visible.
+
+## Mistake rehearsal (Phase 9d)
+
+Log: [drill_attempts](../02-architecture/data-model.md#drill_attempts) ·
+pure logic [packages/shared/src/attempts.ts](../../packages/shared/src/attempts.ts) ·
+web wrapper [lib/drill/interference.ts](../../apps/web/src/lib/drill/interference.ts).
+
+Every answered card in **all three** drill implementations calls `logAttempt()` — correct
+and wrong alike. Correct attempts matter: they are how a repaired mistake decays out.
+
+**`rankMistakes(attempts, { now, windowDays, halfLifeDays })`** — each miss inside a
+14-day window contributes an exponentially decaying weight (7-day half-life); each correct
+attempt pays back half a unit of the same weight; a move with no miss in the window is not
+ranked at all. Without the payback rule the mode degenerates into a permanent hall of
+shame, where a move missed once a fortnight ago and answered correctly five times since
+still outranks a fresh miss.
+
+`mode: 'mistakes'` orders the queue by that ranking and **ignores the due date** — the
+point is to rehearse what was just fumbled, which FSRS has by definition pushed out.
+It composes with `rules.scope`, because scope filtering runs before the mode switch.
+
+**Interference detection.** On a miss, `detectInterference(rep, parentPositionId,
+playedSan, openingLookup?)` asks whether the played SAN is the user's own prep at a
+*different* position in the same tree — the common transposition confusion — and
+`describeInterference()` turns a hit into "e4 is your prep in the Caro-Kann Defense:
+Advance Variation — not here", shown in the wrong-answer card. Two exclusions carry the
+weight: opponent-side moves (a shared SAN there is coincidence, not confusion) and dropped
+branches (calling one "your prep" would be false). In the daily diet it is scoped to the
+card's **own** repertoire — the same SAN prepped in the other color's repertoire is not
+this mix-up.
+
+**Not built:** refutation shadow lines. See
+[repertoire-growth](repertoire-growth.md#mistake-rehearsal).
 
 ## Three drill implementations (known debt)
 

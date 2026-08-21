@@ -34,12 +34,11 @@ Terms used consistently across code, spec, and these docs.
 | **Scope** | A predicate selecting a subset of a repertoire for a session — *derived* from the ECO deepest name, or *explicit* via `line_tags`. A line is a scope, never a copied tree. `DrillRules.scope`; see [srs-drilling](../03-domain/srs-drilling.md#line-scopes-phase-9a). |
 | **Line tag** | A label on a `Move`, inherited from the parent edge at insert time, for what the book can't express (`vs-danny`, `blitz-only`). Column `moves.line_tags`. |
 
-## Phase 9d terms — designed, not built
+## Phase 9d terms
 
-These appear in [repertoire-growth](../03-domain/repertoire-growth.md) only. No code uses
-them yet; don't assume a symbol exists because a term does.
-
-| Term | Meaning |
-|---|---|
-| **Interference** | Playing the SAN that is your correct prep at a *different* position. The common transposition confusion, worth naming explicitly to the user. |
-| **Shadow line** | A stored refutation of a mistake. Never prep, never carded, never walked by the build seed. |
+| Term | Meaning | Status |
+|---|---|---|
+| **Attempt** | One recorded answer to one card: `(moveId, playedSan, wasCorrect, at)`. Append-only, correct answers included. Table `drill_attempts`; local store `drillAttempts`. | ✅ built |
+| **Interference** | Playing the SAN that is your correct prep at a *different* position. The common transposition confusion, named to the user on a miss. [srs-drilling](../03-domain/srs-drilling.md#mistake-rehearsal-phase-9d) | ✅ built |
+| **Mistakes mode** | `DrillMode` value selecting recently-missed cards, recency-weighted, ignoring the due date. Composes with a line scope. | ✅ built |
+| **Shadow line** | A stored refutation of a mistake. Never prep, never carded, never walked by the build seed. | ⏸ designed only — no column, no code |

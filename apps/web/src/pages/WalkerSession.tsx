@@ -54,7 +54,8 @@ import {
 } from '../lib/openings/candidates.ts';
 import { selectAutoExpandSans } from '../lib/walker/autoExpand.ts';
 import { warmFrontier } from '../lib/openings/prefetch.ts';
-import { gradeAndQueue } from '../lib/srs/sync.ts';
+import { gradeAndQueue, logAttempt } from '../lib/srs/sync.ts';
+import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import { useEngine } from '../lib/engine/useEngine.ts';
@@ -90,6 +91,8 @@ type Phase =
        * that's where the motor memory comes from.
        */
       stage: 'reveal' | 'retry';
+      /** Phase 9d: "that SAN is your prep elsewhere in this tree", when it is. */
+      interference?: string;
     }
   | {
       kind: 'drill-paused-for-build';
@@ -684,6 +687,12 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
     setPhase({ kind: 'drill-correct', card: it.card, move: it.move });
     setStats((s) => ({ ...s, correct: s.correct + 1 }));
     void gradeAndQueue(it.card, Grade.Good);
+    void logAttempt({
+      moveId: it.move.id,
+      repertoireId: active!.id,
+      playedSan: it.move.san,
+      wasCorrect: true,
+    });
     await sleep(CORRECT_PAUSE_MS, signal);
     await continueAfterUserMove(it, signal);
   }
@@ -696,11 +705,43 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
   async function runDrillWrong(it: DrillItem, userSan: string, signal: AbortSignal) {
     setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
     void gradeAndQueue(it.card, Grade.Again);
-    setPhase({ kind: 'drill-wrong', card: it.card, move: it.move, userSan, stage: 'reveal' });
+    void logAttempt({
+      moveId: it.move.id,
+      repertoireId: active!.id,
+      playedSan: userSan,
+      wasCorrect: false,
+    });
+    // Read the repertoire from the store: the walker mutates the tree as it
+    // builds, and a stale snapshot would miss preps added this session.
+    const rep = useAppStore.getState().active ?? active!;
+    const interference =
+      describeInterference(
+        detectInterference(
+          rep,
+          it.parentPosition.id,
+          userSan,
+          scopeOptionsRef.current.openingLookup,
+        ),
+      ) ?? undefined;
+    setPhase({
+      kind: 'drill-wrong',
+      card: it.card,
+      move: it.move,
+      userSan,
+      stage: 'reveal',
+      interference,
+    });
     rules.playSan(it.move.san);
     await sleep(WRONG_REVEAL_MS, signal);
     rules.undo();
-    setPhase({ kind: 'drill-wrong', card: it.card, move: it.move, userSan, stage: 'retry' });
+    setPhase({
+      kind: 'drill-wrong',
+      card: it.card,
+      move: it.move,
+      userSan,
+      stage: 'retry',
+      interference,
+    });
   }
 
   async function handleDrillMovePlayed(san: string) {
@@ -1005,6 +1046,9 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
                 <p className="text-xs text-slate-400 mt-1">
                   You played: <span className="font-mono">{phase.userSan}</span>
                 </p>
+                {phase.interference && (
+                  <p className="text-xs text-amber-300 mt-1">{phase.interference}</p>
+                )}
                 <p className="text-xs text-slate-500 mt-1">
                   {phase.stage === 'reveal'
                     ? 'Graded Again — watch the correct move…'

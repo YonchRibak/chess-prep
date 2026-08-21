@@ -22,6 +22,7 @@ Legend: ✅ done · ⏸ parked
 | **8c** ✅ | Navigation & flow polish — path-replay board loading, `MoveLine`, retrain-on-wrong-answer, working skip, inline 409 swap, daily-first home, single creation flow, hash routing |
 | **9a** ✅ | Line scopes — `moves.line_tags` with inherit-on-insert, `DrillRules.scope` (`all` / `openingName` / `tag`), honored by both queue builders and the walker's build seed, offline opening-name cache, scope picker in drill setup and a tag field in the editor |
 | **9b** ✅ | Explorer cache + ranking — `explorer_entries`, the lichess read-through client (never throws, backs off on 429), `GET /explorer/:fenKey`, and the pure candidate-selection policy in `packages/shared` |
+| **9d** 🚧 | Mistake rehearsal — `drill_attempts` (migration `0008`), logged by all three drill implementations, the recency-weighted `mistakes` drill mode, and interference detection on every miss. **Refutation shadow lines are not built.** |
 | **9c** ✅ | Growth loop — opt-in `repertoires.auto_expand`, silent opponent expansion (never re-adds a dropped branch, never writes from book order), engine+explorer candidates in the build prompt, idle frontier prefetcher |
 
 **End of Phase 8 is the real MVP** and it is reached. Everything below is additive.
@@ -39,19 +40,23 @@ Legend: ✅ done · ⏸ parked
 
 ## Next up
 
-### Phase 9d — Mistake rehearsal ⏸ designed, not built
+### Phase 9d — Refutation shadow lines ⏸ designed, not built
 
-Designed in [repertoire-growth.md](../03-domain/repertoire-growth.md) — read that before
-proposing work here. **9a–9c are shipped.** What remains is the mistake side: today a miss
-grades Again and leaves no trace beyond FSRS's `lapses` counter.
+The rest of 9d has shipped: the `drill_attempts` log, the `mistakes` drill mode, and
+interference detection — see
+[srs-drilling](../03-domain/srs-drilling.md#mistake-rehearsal-phase-9d).
 
-A `drill_attempts` log — `(move_id, played_san, was_correct, at)` — unlocks a
-recency-weighted `mistakes` scope (composable with the shipped line scopes), transposition
-**interference detection** (the played SAN is the correct prep at a *different* position —
-nearly free from the index the walker already builds), and optional refutation shadow
-lines that are stored but never prep and never carded.
+What remains is storing the engine's punishment of a miss a few plies deep, tagged as a
+refutation: **stored but never prep, never carded, never walked by the build seed.** If it
+ever produces an SRS card, the feature is wrong. It needs a marker on `moves` —
+prefer a **dedicated column** over a `line_tags` value, since a tag that must be checked
+in the walker, both queue builders, and PGN export is an invariant with no enforcement.
+Design in [repertoire-growth.md](../03-domain/repertoire-growth.md#mistake-rehearsal).
 
-**No table, module, or UI exists for any of it.**
+**No column, module, or UI exists for it.**
+
+Also unbuilt from the 9d design: using the attempt log to steer growth (expand the
+frontier where the user is weak rather than uniformly).
 
 ## Parked
 

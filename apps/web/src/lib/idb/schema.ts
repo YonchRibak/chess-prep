@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { OpeningId, SrsCardDto } from '@chess-prep/shared';
+import type { DrillAttemptDto, OpeningId, SrsCardDto } from '@chess-prep/shared';
 import type { RepertoireFull } from '../../api/client.ts';
 
 /**
@@ -12,6 +12,9 @@ import type { RepertoireFull } from '../../api/client.ts';
  * - openingNames: fenKey → book name (Phase 9a), so opening-name line scopes
  *   can be evaluated during an offline session. A cache only — the book itself
  *   still lives on the server (see lib/openings/nameCache.ts).
+ * - drillAttempts: the Phase 9d attempt log, held locally because the
+ *   `mistakes` drill mode must build its queue offline like every other mode.
+ * - attemptQueue: attempts waiting to be appended on the server.
  */
 interface ChessPrepDB extends DBSchema {
   srsCards: {
@@ -37,15 +40,26 @@ interface ChessPrepDB extends DBSchema {
     key: string;
     value: { fenKey: string; opening: OpeningId };
   };
+  drillAttempts: {
+    // key is the attempt's client-generated id
+    key: string;
+    value: DrillAttemptDto;
+    indexes: { at: string; moveId: string };
+  };
+  attemptQueue: {
+    key: string;
+    value: DrillAttemptDto;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<ChessPrepDB>> | null = null;
 
 export function getDb(): Promise<IDBPDatabase<ChessPrepDB>> {
   if (!dbPromise) {
-    // v2 added `openingNames` (Phase 9a). The upgrade handler is additive and
-    // idempotent, so an existing v1 database keeps its cards and repertoires.
-    dbPromise = openDB<ChessPrepDB>('chess-prep', 2, {
+    // v2 added `openingNames` (Phase 9a), v3 the attempt log (Phase 9d). The
+    // upgrade handler is additive and idempotent, so an existing database keeps
+    // its cards and repertoires.
+    dbPromise = openDB<ChessPrepDB>('chess-prep', 3, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('srsCards')) {
           const cards = db.createObjectStore('srsCards', { keyPath: 'moveId' });
@@ -63,6 +77,14 @@ export function getDb(): Promise<IDBPDatabase<ChessPrepDB>> {
         }
         if (!db.objectStoreNames.contains('openingNames')) {
           db.createObjectStore('openingNames', { keyPath: 'fenKey' });
+        }
+        if (!db.objectStoreNames.contains('drillAttempts')) {
+          const attempts = db.createObjectStore('drillAttempts', { keyPath: 'id' });
+          attempts.createIndex('at', 'at');
+          attempts.createIndex('moveId', 'moveId');
+        }
+        if (!db.objectStoreNames.contains('attemptQueue')) {
+          db.createObjectStore('attemptQueue', { keyPath: 'id' });
         }
       },
     });
@@ -159,6 +181,56 @@ export async function getAllOpeningNamesLocal(): Promise<Map<string, OpeningId>>
   const db = await getDb();
   const rows = await db.getAll('openingNames');
   return new Map(rows.map((r) => [r.fenKey, r.opening]));
+}
+
+/* ---------------- drill attempts (Phase 9d) ---------------- */
+
+/**
+ * Write an attempt locally and queue it for push.
+ *
+ * Local-first for the same reason cards are: the `mistakes` mode has to build
+ * its queue from the log, and a mode that only works online would be the one
+ * offline hole in the drill surface.
+ */
+export async function recordAttemptLocal(attempt: DrillAttemptDto): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(['drillAttempts', 'attemptQueue'], 'readwrite');
+  await Promise.all([
+    tx.objectStore('drillAttempts').put(attempt),
+    tx.objectStore('attemptQueue').put(attempt),
+  ]);
+  await tx.done;
+}
+
+/** Attempts at or after `since` (all of them when omitted), newest first. */
+export async function getAttemptsLocal(since?: Date): Promise<DrillAttemptDto[]> {
+  const db = await getDb();
+  const rows = since
+    ? await db.getAllFromIndex('drillAttempts', 'at', IDBKeyRange.lowerBound(since.toISOString()))
+    : await db.getAll('drillAttempts');
+  return rows.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** Merge server-side attempts in. Ids are stable, so this is a plain put. */
+export async function mergeAttemptsLocal(remote: DrillAttemptDto[]): Promise<void> {
+  if (remote.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('drillAttempts', 'readwrite');
+  await Promise.all(remote.map((a) => tx.store.put(a)));
+  await tx.done;
+}
+
+export async function drainAttemptQueue(): Promise<DrillAttemptDto[]> {
+  const db = await getDb();
+  return db.getAll('attemptQueue');
+}
+
+export async function clearAttemptQueueEntries(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('attemptQueue', 'readwrite');
+  await Promise.all(ids.map((id) => tx.store.delete(id)));
+  await tx.done;
 }
 
 /* ---------------- push queue ---------------- */

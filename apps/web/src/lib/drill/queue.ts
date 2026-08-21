@@ -3,7 +3,9 @@ import {
   isUserMove,
   matchesLineScope,
   mergeDrillRules,
+  rankMistakes,
   type Color,
+  type DrillAttemptDto,
   type DrillMode,
   type DrillRules,
   type OpeningId,
@@ -47,6 +49,13 @@ export interface BuildQueueArgs {
    * drilling the wrong opening.
    */
   openingLookup?: (fenKey: string) => OpeningId | null;
+  /**
+   * Phase 9d: the local drill-attempt log, required by `mode === 'mistakes'`
+   * and ignored by every other mode. Omitting it yields an EMPTY mistakes queue
+   * rather than a full one — "you have no recent mistakes" is a true and useful
+   * answer, whereas silently degrading to "drill everything" is neither.
+   */
+  attempts?: readonly DrillAttemptDto[];
 }
 
 /**
@@ -62,6 +71,7 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
     now = new Date(),
     rng = Math.random,
     openingLookup,
+    attempts,
   } = args;
   const rules = mergeDrillRules(rulesIn);
   const scope = rules.scope;
@@ -141,6 +151,16 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
         return new Date(a.card.due).getTime() - new Date(b.card.due).getTime();
       });
       return items;
+    }
+    case 'mistakes': {
+      // Recency-weighted, and NOT filtered by due date: the point of the mode
+      // is to rehearse a move the user just got wrong, which FSRS has by
+      // definition scheduled for later.
+      const ranked = rankMistakes(attempts ?? [], { now });
+      const rankByMoveId = new Map(ranked.map((m, i) => [m.moveId, i]));
+      return items
+        .filter((it) => rankByMoveId.has(it.move.id))
+        .sort((a, b) => rankByMoveId.get(a.move.id)! - rankByMoveId.get(b.move.id)!);
     }
     case 'random': {
       // Fisher-Yates shuffle

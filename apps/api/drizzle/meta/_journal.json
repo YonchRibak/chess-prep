@@ -57,6 +57,13 @@
       "when": 1787245564904,
       "tag": "0007_auto_expand",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787309965475,
+      "tag": "0008_drill_attempts",
+      "breakpoints": true
     }
   ]
 }

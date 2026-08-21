@@ -86,6 +86,8 @@ paused (cache reads continue). See [explorer](../03-domain/explorer.md).
 |---|---|
 | `GET /srs/cards?since&repertoireId` | → `{ cards, serverTime }`. Omit `since` for a full bootstrap pull. `serverTime` becomes the client's next watermark — **server clock, not client clock** |
 | `POST /srs/cards/push` | `{ updates: SrsCardDto[] }` → `{ accepted, ignored, cards }`. Last-write-wins by `updatedAt`; `ignored` are stale updates the server already superseded |
+| `GET /srs/attempts?since&repertoireId&limit` | Phase 9d → `{ attempts, serverTime }`, newest first, capped at 5000. |
+| `POST /srs/attempts` | Phase 9d `{ attempts: DrillAttemptDto[] }` → `{ accepted, ignored }`. **Append-only, not an upsert** — no conflict resolution; `ignored` counts attempts whose `moveId` doesn't exist. `repertoireId` in the body is ignored and taken from the move. |
 
 ## `/settings`
 

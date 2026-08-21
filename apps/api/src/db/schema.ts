@@ -177,6 +177,43 @@ export const explorerEntries = pgTable(
 );
 
 /**
+ * Phase 9d: append-only log of drill answers. One row per answered card, never
+ * updated — the value is entirely in the sequence, so an "upsert latest attempt"
+ * shape would destroy the only thing the table is for.
+ *
+ * `played_san` is what makes this more than FSRS's `lapses` counter: it powers
+ * interference detection (the played move is the user's prep at a *different*
+ * position). Correct attempts are logged too — the mistakes ranking uses them to
+ * let a repaired mistake fade out. See packages/shared/src/attempts.ts.
+ *
+ * `repertoire_id` is denormalized so the log can be scoped without joining
+ * through `moves`; both cascade, so a deleted repertoire takes its log with it.
+ */
+export const drillAttempts = pgTable(
+  'drill_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    moveId: uuid('move_id')
+      .notNull()
+      .references(() => moves.id, { onDelete: 'cascade' }),
+    repertoireId: uuid('repertoire_id')
+      .notNull()
+      .references(() => repertoires.id, { onDelete: 'cascade' }),
+    playedSan: text('played_san').notNull(),
+    wasCorrect: boolean('was_correct').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // The only query shape: "this user's recent attempts", optionally per rep.
+    index('idx_attempts_user_at').on(t.userId, t.at),
+    index('idx_attempts_move').on(t.moveId),
+  ],
+);
+
+/**
  * Phase 8a daily-diet settings. One row per user. `newCardsPerDay` caps how
  * many cards in FSRS state=new can enter the daily diet — without this,
  * fresh repertoires flood the first sessions. `dailyDietLastResetAt` is the
@@ -202,3 +239,4 @@ export type DbSrsCard = typeof srsCards.$inferSelect;
 export type DbOpeningBookEntry = typeof openingBookEntries.$inferSelect;
 export type DbUserSettings = typeof userSettings.$inferSelect;
 export type DbExplorerEntry = typeof explorerEntries.$inferSelect;
+export type DbDrillAttempt = typeof drillAttempts.$inferSelect;

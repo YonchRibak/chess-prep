@@ -8,7 +8,7 @@ card fields.
 ## IndexedDB
 
 [apps/web/src/lib/idb/schema.ts](../../apps/web/src/lib/idb/schema.ts) — database
-`chess-prep`, version 2, via `idb`. Five object stores:
+`chess-prep`, version 3, via `idb`. Seven object stores:
 
 | Store | Key | Purpose |
 |---|---|---|
@@ -17,6 +17,8 @@ card fields.
 | `meta` | string key | Small KV — notably `srs.lastSyncedAt`. |
 | `pushQueue` | `moveId` | Graded cards awaiting upload. |
 | `openingNames` | `fenKey` | Phase 9a: book names for the user's own positions, so `openingName` [line scopes](../03-domain/srs-drilling.md#line-scopes-phase-9a) resolve offline. Cache only — safe to clear, refills from `POST /openings/by-fens`. |
+| `drillAttempts` | attempt `id` | Phase 9d: the drill-attempt log. Indexes on `at` and `moveId`. **Not a cache** — the `mistakes` mode builds its queue from this, so it must be local. |
+| `attemptQueue` | attempt `id` | Attempts awaiting upload. |
 
 Note `srsCards` is keyed by `moveId`, not card `id` — consistent with "one card per
 move".
@@ -35,7 +37,21 @@ move".
 - **`flushQueue()`** — `POST /srs/cards/push`. On any network/HTTP failure it returns
   early and leaves the queue intact for the next attempt. On success it clears the sent
   entries and merges the server's canonical reply back in.
-- **`attachOnlineFlush()`** — flushes on the `online` event; returns an unsubscribe.
+- **`attachOnlineFlush()`** — flushes both queues on the `online` event; returns an
+  unsubscribe.
+
+Phase 9d adds a parallel, simpler loop for the attempt log:
+
+- **`logAttempt({ moveId, repertoireId, playedSan, wasCorrect })`** — writes locally and
+  queues, then fires a best-effort `flushAttempts()`. Fire-and-forget by design: an
+  attempt is input to the mistakes mode, and failing a drill because a log write failed
+  would trade a real feature for a bookkeeping one.
+- **`flushAttempts()`** — `POST /srs/attempts`; leaves the queue intact on failure.
+- **`pullAttempts(repertoireId?, since?)`** — merges the server's log in. Only ever
+  *adds*, and callers treat a failure as non-fatal, because the local log is what the
+  mistakes queue reads. There is **no watermark** for attempts (no `meta` key): the
+  append-only log has no update-in-place to miss, and ids are stable so re-merging is a
+  no-op.
 
 ## Conflict resolution
 

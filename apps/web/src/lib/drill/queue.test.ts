@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildDailyDietQueue, buildDrillQueue } from './queue.ts';
 import type { RepertoireFull } from '../../api/client.ts';
-import type { SrsCardDto } from '@chess-prep/shared';
+import type { DrillAttemptDto, SrsCardDto } from '@chess-prep/shared';
 
 /** Hand-built tiny repertoire for tests: 1.e4 e5 2.Nf3 (with 2.d4 as variation). */
 function makeRep(): RepertoireFull {
@@ -325,5 +325,75 @@ describe('buildDailyDietQueue', () => {
     // cards even though 3 were eligible.
     const newCount = out.filter((it) => it.card.state === 0).length;
     expect(newCount).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("buildDrillQueue — 'mistakes' mode (Phase 9d)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  function attempt(moveId: string, wasCorrect: boolean, daysAgo: number): DrillAttemptDto {
+    return {
+      id: `${moveId}-${daysAgo}`,
+      moveId,
+      repertoireId: 'rep1',
+      playedSan: 'x',
+      wasCorrect,
+      at: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
+    };
+  }
+
+  const allCards = [makeCard('m-e4', 999999), makeCard('m-d4', 999999), makeCard('m-Nf3', 999999)];
+
+  it('includes only moves missed recently, most recent miss first', () => {
+    const q = buildDrillQueue({
+      repertoire: makeRep(),
+      cards: allCards,
+      mode: 'mistakes',
+      rules: {},
+      now: NOW,
+      attempts: [attempt('m-d4', false, 8), attempt('m-Nf3', false, 1)],
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['Nf3', 'd4']);
+  });
+
+  // The whole point of the mode: a card FSRS has scheduled for next month is
+  // still the one the user fumbled this morning.
+  it('ignores the due date', () => {
+    const q = buildDrillQueue({
+      repertoire: makeRep(),
+      cards: allCards,
+      mode: 'mistakes',
+      rules: {},
+      now: NOW,
+      attempts: [attempt('m-e4', false, 1)],
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['e4']);
+  });
+
+  // An unfiltered queue here would be indistinguishable from a correct one
+  // until the user noticed they were drilling moves they never got wrong.
+  it('is empty without an attempt log rather than falling back to everything', () => {
+    const q = buildDrillQueue({
+      repertoire: makeRep(),
+      cards: allCards,
+      mode: 'mistakes',
+      rules: {},
+      now: NOW,
+    });
+    expect(q).toEqual([]);
+  });
+
+  it('composes with a line scope', () => {
+    const rep = makeRep();
+    rep.moves = rep.moves.map((m) => (m.id === 'm-d4' ? { ...m, lineTags: ['vs-danny'] } : m));
+    const q = buildDrillQueue({
+      repertoire: rep,
+      cards: allCards,
+      mode: 'mistakes',
+      rules: { scope: { kind: 'tag', value: 'vs-danny' } },
+      now: NOW,
+      attempts: [attempt('m-d4', false, 2), attempt('m-Nf3', false, 1)],
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['d4']);
   });
 });

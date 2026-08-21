@@ -112,6 +112,21 @@ both sides rank identically. Details and the local 401 gotcha:
   `updatedAt`**; a stale update is counted in `ignored` rather than erroring, and the
   canonical rows come back in `cards`.
 
+## attempts.ts
+
+Phase 9d drill-attempt log. `recordAttempts(userId, raw)` is a plain **append** — no
+upsert, no conflict resolution, and duplicates are accepted (see
+[data-model](../02-architecture/data-model.md#drill_attempts) for why that's the cheaper
+failure mode). The only correctness check is that the `moveId` exists; the
+`repertoireId` written comes from the move, never from the body, so a mislabeling client
+can't scope an attempt to the wrong log forever.
+`listAttempts(userId, since?, repertoireId?, limit?)` → `{ attempts, serverTime }`,
+newest first, hard-capped at 5000 so a long-lived log can't blow up a sync response.
+
+The server is **not** authoritative here: the client keeps its own copy in IndexedDB and
+the `mistakes` drill mode reads that, not this. See
+[local-first-sync](../02-architecture/local-first-sync.md).
+
 ## userSettings.ts
 
 - `getUserSettings(userId)` — seeds defaults on first read (get-or-create).

@@ -1,6 +1,6 @@
 # Repertoire growth & line scopes
 
-**Status: 9a, 9b and 9c are BUILT; 9d is designed, NOT built.**
+**Status: 9a, 9b, 9c are BUILT, and 9d is built EXCEPT refutation shadow lines.**
 
 - **Line scopes (9a) are shipped** — `moves.line_tags`, `DrillRules.scope`, and the
   filtering in both queue builders and the walker's build seed. The authoritative
@@ -13,8 +13,13 @@
 - **Auto-expansion, the candidate UI and the frontier prefetcher (9c) are shipped** —
   opt-in per repertoire via `repertoires.auto_expand`. Authoritative descriptions:
   [walker](walker.md#auto-expansion-phase-9c) and [explorer](explorer.md).
-- **`drill_attempts`, the mistakes scope, interference detection and shadow lines have no
-  table, no module, and no UI.** Read that section as intent, not current state.
+- **`drill_attempts`, the `mistakes` drill mode and interference detection are shipped.**
+  Authoritative description:
+  [srs-drilling](srs-drilling.md#mistake-rehearsal-phase-9d). Note the design below calls
+  it a *scope*; it shipped as a `DrillMode` value instead, because scope filtering already
+  runs before the mode switch and the two compose for free.
+- **Refutation shadow lines have no column, no module, and no UI**, and neither does using
+  the log to steer growth. Read those parts as intent, not current state.
 
 See [roadmap](../06-workflows/roadmap.md) and PROJECT_SPEC §5.
 
@@ -180,7 +185,7 @@ uniformly.
 |---|---|---|
 | `line_tags text[] not null default '{}'` | `moves` | ✅ applied, migration `0005_line_tags`. Inherited on insert |
 | new `explorer_entries` | — | ✅ applied, migration `0006_explorer_entries`. Cache; safe to truncate |
-| new `drill_attempts` | — | Append-only; cascade from `moves` |
+| new `drill_attempts` | — | ✅ applied, migration `0008_drill_attempts`. Append-only; cascades from `moves` |
 | `scope` field | `repertoires.drill_rules` (jsonb) | ✅ shipped. Partial, via `mergeDrillRules()`; validated on write by `parseLineScope` |
 
 Refutation shadow lines need a marker on `moves` distinguishing them from prep — either a
@@ -201,7 +206,7 @@ one prep row per `(user, parent_position)` beyond the existing constraint.
 | **9a** ✅ | `line_tags` + inherit-on-insert; derived opening-name scope; `DrillRules.scope` + picker | Request 1, entirely — no network |
 | **9b** ✅ | `explorer_entries` + Lichess explorer client; candidate ranking in `packages/shared` — see [explorer](explorer.md) | The supply side of request 2 |
 | **9c** ✅ | Opponent auto-expand; ranked candidate UI in the build phase; frontier prefetcher | Request 2 — the seamless part |
-| **9d** | `drill_attempts`; mistakes scope; interference detection; refutation shadow lines | Mistake rehearsal |
+| **9d** 🚧 | `drill_attempts` ✅; `mistakes` mode ✅; interference detection ✅; refutation shadow lines ⏸ | Mistake rehearsal |
 
 9a is independently valuable and touches no network or new data source — ship it alone.
 

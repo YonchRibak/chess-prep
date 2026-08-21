@@ -3,15 +3,17 @@ import {
   Grade,
   mergeDrillRules,
   type DrillMode,
+  type OpeningId,
 } from '@chess-prep/shared';
 import { useAppStore } from '../store/app.ts';
 import { useChessRules } from '../lib/chess/useChessRules.ts';
 import { Board } from '../components/Board.tsx';
 import { Btn, Card } from '../components/ui.tsx';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
-import { getAllCardsLocal } from '../lib/idb/schema.ts';
+import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
+import { getAllCardsLocal, getAttemptsLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
-import { gradeAndQueue } from '../lib/srs/sync.ts';
+import { gradeAndQueue, logAttempt, pullAttempts } from '../lib/srs/sync.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import type { BoardColor } from '../lib/chess/useBoard.ts';
 
@@ -19,7 +21,7 @@ type Phase =
   | { kind: 'loading' }
   | { kind: 'prompt'; index: number }
   | { kind: 'correct'; index: number }
-  | { kind: 'wrong'; index: number; userSan: string }
+  | { kind: 'wrong'; index: number; userSan: string; interference?: string }
   | { kind: 'complete' };
 
 // Flow timings — tuned so the user sees their move land and the opponent
@@ -48,6 +50,11 @@ export function DrillSession() {
   const modeRef = useRef<DrillMode>(
     view.kind === 'drill-session' ? view.mode : 'due',
   );
+
+  // Kept in a ref rather than state: it is only read inside the wrong-answer
+  // handler, and re-rendering the board because a name cache filled would
+  // interrupt the flow it exists to explain.
+  const openingLookupRef = useRef<((fenKey: string) => OpeningId | null) | undefined>(undefined);
 
   const [queue, setQueue] = useState<DrillItem[] | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -83,12 +90,25 @@ export function DrillSession() {
       // session's queue matches the count the user saw before starting.
       const names = await ensureOpeningNames([active]);
       if (cancelled) return;
+      // Phase 9d: refresh the attempt log from the server before building, but
+      // never block on it — the local log is what the mistakes mode reads, and
+      // the session must start offline.
+      if (modeRef.current === 'mistakes') {
+        await pullAttempts(active.id).catch(() => {
+          /* offline or server down — the local log stands on its own */
+        });
+        if (cancelled) return;
+      }
+      const attempts = await getAttemptsLocal();
+      if (cancelled) return;
+      openingLookupRef.current = openingNameLookup(names);
       const q = buildDrillQueue({
         repertoire: active,
         cards,
         mode: modeRef.current,
         rules: drillRules,
         openingLookup: openingNameLookup(names),
+        attempts,
       });
       if (cancelled) return;
       setQueue(q);
@@ -146,6 +166,12 @@ export function DrillSession() {
     setPhase({ kind: 'correct', index: idx });
     setStats((s) => ({ ...s, correct: s.correct + 1 }));
     void gradeAndQueue(it.card, Grade.Good);
+    void logAttempt({
+      moveId: it.move.id,
+      repertoireId: active!.id,
+      playedSan: it.move.san,
+      wasCorrect: true,
+    });
     await sleep(CORRECT_PAUSE_MS, signal);
     if (mode === 'walkthrough' && it.opponentResponseSan && !rules.isGameOver) {
       rules.playSan(it.opponentResponseSan);
@@ -160,9 +186,20 @@ export function DrillSession() {
     userSan: string,
     signal: AbortSignal,
   ) {
-    setPhase({ kind: 'wrong', index: idx, userSan });
+    // Phase 9d: name the confusion when the played move is the user's own prep
+    // somewhere else in this tree — the common transposition mix-up.
+    const interference = describeInterference(
+      detectInterference(active!, it.parentPosition.id, userSan, openingLookupRef.current),
+    );
+    setPhase({ kind: 'wrong', index: idx, userSan, interference: interference ?? undefined });
     setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
     void gradeAndQueue(it.card, Grade.Again);
+    void logAttempt({
+      moveId: it.move.id,
+      repertoireId: active!.id,
+      playedSan: userSan,
+      wasCorrect: false,
+    });
     await sleep(WRONG_REVEAL_MS, signal);
     if (mode === 'walkthrough') {
       // Demonstrate the correct line so the visual flow stays coherent.
@@ -327,6 +364,9 @@ export function DrillSession() {
                     You played: <span className="font-mono">{phase.userSan}</span>
                   </p>
                 )}
+                {phase.interference && (
+                  <p className="text-xs text-amber-300 mt-1">{phase.interference}</p>
+                )}
                 <p className="text-xs text-slate-500 mt-1">Graded Again · next card…</p>
               </Card>
             )}
@@ -347,6 +387,8 @@ function modeLabel(mode: DrillMode): string {
       return 'Weak spots';
     case 'random':
       return 'Random';
+    case 'mistakes':
+      return 'Recent mistakes';
   }
 }
 

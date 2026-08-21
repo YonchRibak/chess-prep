@@ -1,3 +1,4 @@
+export * from './attempts.js';
 export * from './auth.js';
 export * from './drill.js';
 export * from './explorer.js';

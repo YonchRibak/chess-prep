@@ -14,7 +14,7 @@ import {
 import { useAppStore } from '../store/app.ts';
 import { Btn, Card } from '../components/ui.tsx';
 import { buildDrillQueue } from '../lib/drill/queue.ts';
-import { getAllCardsLocal } from '../lib/idb/schema.ts';
+import { getAllCardsLocal, getAttemptsLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import { buildDeepestOpeningIndex } from '../lib/openings/pathNames.ts';
 import { pullAll } from '../lib/srs/sync.ts';
@@ -24,6 +24,11 @@ const MODES: { value: DrillMode; label: string; hint: string }[] = [
   { value: 'walkthrough', label: 'Full-line walkthrough', hint: 'Walk the main line of the repertoire.' },
   { value: 'weak', label: 'Weak spots', hint: 'Most-lapsed and least-stable cards first.' },
   { value: 'random', label: 'Random position', hint: 'Random card from the whole tree.' },
+  {
+    value: 'mistakes',
+    label: 'Recent mistakes',
+    hint: 'Cards actually missed in the last two weeks, most recent first.',
+  },
 ];
 
 export function DrillSetup() {
@@ -129,12 +134,17 @@ export function DrillSetup() {
     (async () => {
       const cards = await getAllCardsLocal();
       if (cancelled) return;
+      // The preview must count what the session will actually contain, so the
+      // mistakes mode needs the same log the session will read.
+      const attempts = await getAttemptsLocal();
+      if (cancelled) return;
       const q = buildDrillQueue({
         repertoire: active,
         cards,
         mode,
         rules,
         openingLookup: openingNames ? openingNameLookup(openingNames) : undefined,
+        attempts,
       });
       setPreviewLen(q.length);
     })();

@@ -2,7 +2,8 @@
 
 Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
-`0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`, `0007_auto_expand`.
+`0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`,
+`0007_auto_expand`, `0008_drill_attempts`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -72,6 +73,23 @@ truth — safe to truncate**, and every reader must work with it cold. `source` 
 dataset's filters (`lichess:blitz,rapid,classical:1600`) because the same position has
 different statistics per rating band and time control. Full rationale in
 [explorer](../03-domain/explorer.md).
+
+### `drill_attempts`
+Phase 9d append-only log of drill answers: `user_id`, `move_id`, `repertoire_id`,
+`played_san`, `was_correct`, `at`. Indexes `idx_attempts_user_at (user_id, at)` and
+`idx_attempts_move (move_id)`; everything cascades.
+
+**Never updated** — the value is entirely in the sequence, so an "upsert the latest
+attempt" shape would destroy the only thing the table is for. Correct attempts are logged
+too, because the mistakes ranking uses them to let a repaired mistake decay out.
+`played_san` is what makes this more than FSRS's `lapses` counter: it powers interference
+detection. `repertoire_id` is denormalized so the log can be scoped without joining
+through `moves`, and is taken **from the move server-side**, never from the request body.
+
+Duplicate rows are accepted rather than deduplicated: the client flushes a retryable
+queue, and a replay slightly over-weights one mistake, whereas deduplicating on a
+client-chosen id would let a client silently suppress real attempts.
+See [srs-drilling](../03-domain/srs-drilling.md#mistake-rehearsal-phase-9d).
 
 ### `user_settings`
 One row per user: `new_cards_per_day` (default 20), `daily_diet_last_reset_at`,

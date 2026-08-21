@@ -154,6 +154,17 @@ ExplorerEntry (             -- (added in Phase 9b) — a CACHE, never a source o
   -- unique (fen_key, source). Safe to truncate; every reader works with it cold.
 )
 
+DrillAttempt (              -- (added in Phase 9d) — APPEND-ONLY; never updated
+  id,
+  user_id,
+  move_id,                  -- cascades
+  repertoire_id,            -- denormalized so the log scopes without a join
+  played_san,               -- what makes this more than FSRS's `lapses` counter
+  was_correct,              -- correct attempts logged too: they decay a repaired mistake
+  at,
+  -- index (user_id, at), index (move_id). Duplicates accepted, not deduplicated.
+)
+
 UserSettings (              -- (added in Phase 8a)
   user_id,
   new_cards_per_day,        -- default 20
@@ -382,7 +393,7 @@ Still open (deliberately deferred): merging the three drill implementations
 multi-repertoire walker — see Phase 8a note; classic drill remains reachable
 via the card overflow menu until then.
 
-### Phase 9 — Repertoire growth & line scopes 🚧 in progress (9a, 9b, 9c ✅ done)
+### Phase 9 — Repertoire growth & line scopes 🚧 in progress (9a, 9b, 9c ✅ done; 9d all but shadow lines)
 
 Two asks that are one feature: an opening should hold all its branches yet be
 drillable one line at a time, and building should happen *inside* drilling
@@ -413,10 +424,12 @@ Summary:
   with candidates pre-ranked one click away. `newCardsPerDay` stays the only
   throttle. Opt-in per repertoire, and it must never re-add a dropped branch.
 - **Mistake rehearsal.** A `drill_attempts` log gives a recency-weighted
-  `mistakes` scope, **interference detection** (the played SAN is the correct
-  prep at a *different* position — the common transposition confusion, nearly
-  free from the existing index), and optional refutation shadow lines that are
-  stored but never prep and never carded.
+  `mistakes` drill mode (it shipped as a `DrillMode` value rather than a scope —
+  scope filtering already runs first, so the two compose for free),
+  **interference detection** (the played SAN is the correct prep at a *different*
+  position — the common transposition confusion, nearly free from the existing
+  index), and optional refutation shadow lines that are stored but never prep and
+  never carded. The shadow lines are **not built**.
 
 Sub-phases: **9a** scopes ✅ **done** — `moves.line_tags` (migration `0005`) with
 inherit-on-insert, `DrillRules.scope`, filtering in `buildDrillQueue` /
@@ -428,7 +441,11 @@ selection policy in `packages/shared` (consumed by the 9c build prompt) ·
 **9c** auto-expand + candidate UI + frontier prefetcher ✅ **done** — opt-in
 `repertoires.auto_expand` (migration `0007`); auto-expansion never re-adds a dropped
 branch and refuses to write from book-ordered candidates (only real frequencies
-authorize a silent write) · **9d** mistake rehearsal.
+authorize a silent write) · **9d** mistake rehearsal 🚧 — `drill_attempts`
+(migration `0008`) written by all three drill implementations and held locally in
+IndexedDB so the mode works offline, the recency-weighted `mistakes` drill mode,
+and interference detection surfaced on every miss. **Refutation shadow lines and
+weakness-steered growth are not built.**
 
 The 9b fetch/aggregate/frequency-per-fenKey plumbing is the same as Phase 10
 needs, which is why growth now comes before scouting.
