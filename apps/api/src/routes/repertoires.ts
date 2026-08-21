@@ -7,6 +7,7 @@ import {
   appendRefutation,
   createRepertoire,
   deleteMove,
+  deleteAllRepertoires,
   deleteRepertoire,
   exportPgn,
   getRepertoire,
@@ -60,6 +61,14 @@ repertoireRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
   const result = await safeJson(() => patchRepertoire(userId(), id, body));
+  if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404 | 500);
+  return c.json(result.data);
+});
+
+// Bulk wipe. Distinct path from `DELETE /:id` so it can never be reached by a
+// malformed id — "delete everything" must be something you asked for by name.
+repertoireRoutes.delete('/', async (c) => {
+  const result = await safeJson(() => deleteAllRepertoires(userId()));
   if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404 | 500);
   return c.json(result.data);
 });

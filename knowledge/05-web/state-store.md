@@ -31,7 +31,12 @@ interface AppStore {
 |---|---|
 | Navigation | `go(view)` — also clears `active` when landing on `list` |
 | Loading | `loadList()`, `loadRepertoire(id)` (loads **without** changing the view — for the router / deep links), `openRepertoire(id)` (load + navigate), `reloadActive()` |
-| Repertoire CRUD | `createRepertoire({ name, color, tags?, seedSans? })`, `importPgn({ name, color, pgn, tags? })`, `renameRepertoire`, `deleteRepertoire`, `exportPgn(id)`, `patchDrillRules(id, rules)`, `setAutoExpand(id, on)` |
+| Repertoire CRUD | `createRepertoire({ name, color, tags?, seedSans? })`, `importPgn({ name, color, pgn, tags? })`, `renameRepertoire`, `deleteRepertoire`, `deleteAllRepertoires()`, `exportPgn(id)`, `patchDrillRules(id, rules)`, `setAutoExpand(id, on)` |
+
+`deleteRepertoire` and `deleteAllRepertoires` both call the server **first** and touch
+IndexedDB only after it succeeds — a failed request must leave the offline copy still
+matching the server, not ahead of it. See
+[local-first-sync](../02-architecture/local-first-sync.md#indexeddb).
 | Move edits | `addMove(parentFenKey, san, isMainLine?)`, `setComment`, `setAnnotation`, `setMainLine`, `setPriority`, `setLineTags`, `deleteMove` |
 
 Note the deliberate split between `loadRepertoire` and `openRepertoire` — mixing them up

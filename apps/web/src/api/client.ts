@@ -161,6 +161,14 @@ export const api = {
     return request(`/repertoires/${id}`, { method: 'DELETE', expectNoContent: true });
   },
 
+  /**
+   * Delete every repertoire. Atomic server-side; returns how many rows went,
+   * which is not necessarily what the client had listed.
+   */
+  deleteAllRepertoires(): Promise<{ deleted: number }> {
+    return request('/repertoires', { method: 'DELETE' });
+  },
+
   addMove(
     repertoireId: string,
     input: {

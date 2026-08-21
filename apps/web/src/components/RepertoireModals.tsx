@@ -222,3 +222,95 @@ export function ImportPgnModal({
     </Modal>
   );
 }
+
+/**
+ * Confirm wiping every repertoire.
+ *
+ * Deliberately heavier than the per-repertoire `confirm()`: this one also
+ * destroys SRS history — months of scheduling state that no amount of
+ * re-importing PGN brings back, because a re-imported move starts as a new
+ * card. So it states the cost in numbers, points at the export that would have
+ * preserved the trees, and asks for the word to be typed. A misclick should not
+ * be able to reach the end of this.
+ */
+export function DeleteAllRepertoiresModal({
+  repertoireCount,
+  cardCount,
+  onClose,
+  onConfirm,
+}: {
+  repertoireCount: number;
+  /** Cards known locally; `null` while stats are still loading. */
+  cardCount: number | null;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [typed, setTyped] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const armed = typed.trim().toUpperCase() === 'DELETE';
+
+  return (
+    <Modal onClose={onClose}>
+      <h3 className="font-semibold text-rose-300">Delete all repertoires?</h3>
+      <p className="text-sm text-slate-300">
+        This permanently deletes{' '}
+        <strong className="font-mono">{repertoireCount}</strong> repertoire
+        {repertoireCount === 1 ? '' : 's'}
+        {cardCount !== null && (
+          <>
+            {' '}
+            and all <strong className="font-mono">{cardCount}</strong> SRS card
+            {cardCount === 1 ? '' : 's'} with them
+          </>
+        )}
+        , on the server and on this device.
+      </p>
+      <p className="text-xs text-slate-400">
+        Move trees can be rebuilt from a PGN export — <em>scheduling history cannot</em>.
+        A re-imported move comes back as a new card. Export anything you want to keep
+        first.
+      </p>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-slate-400 text-xs">
+          Type <span className="font-mono text-rose-300">DELETE</span> to confirm
+        </span>
+        <input
+          autoFocus
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono"
+        />
+      </label>
+      {err && <p className="text-xs text-rose-300">{err}</p>}
+      <div className="flex gap-2 justify-end pt-2">
+        <Btn type="button" onClick={onClose}>
+          Cancel
+        </Btn>
+        <Btn
+          type="button"
+          disabled={!armed || submitting}
+          className={
+            armed && !submitting
+              ? 'border-rose-700 bg-rose-900/60 text-rose-100 hover:bg-rose-900'
+              : ''
+          }
+          onClick={() => {
+            void (async () => {
+              setSubmitting(true);
+              setErr(null);
+              try {
+                await onConfirm();
+              } catch (e) {
+                setErr(e instanceof Error ? e.message : String(e));
+                setSubmitting(false);
+              }
+            })();
+          }}
+        >
+          {submitting ? 'Deleting…' : `Delete all ${repertoireCount}`}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}

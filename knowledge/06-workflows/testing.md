@@ -33,6 +33,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | File | Guards |
 |---|---|
 | [repertoires.invariant.test.ts](../../apps/api/src/services/repertoires.invariant.test.ts) | One-prep-per-user-turn-position, including the `swap` path |
+| [deleteAll.test.ts](../../apps/api/src/services/deleteAll.test.ts) | That `deleteAllRepertoires` wipes its own user's repertoires and cascades their cards — and, the assertion that actually matters, that a **bystander user's** repertoire survives. A missing `where user_id` passes every "did it delete?" check and fails only this one. Runs against a throwaway user, never `DEFAULT_USER_ID` |
 | [refutations.invariant.test.ts](../../apps/api/src/services/refutations.invariant.test.ts) | Phase 9d, the whole feature stated as what must **not** happen: no card for any ply of a shadow line, no claim on the one prep slot, omitted from PGN export, promotion to prep is one-way, idempotent re-save, and the ply cap is enforced |
 | [import-openings.parity.test.ts](../../apps/api/src/scripts/import-openings.parity.test.ts) | Importer rows match `fenKey()`-normalized lookups, byte for byte |
 | [explorer.test.ts](../../apps/api/src/services/explorer.test.ts) | Parsing third-party explorer JSON (malformed rows dropped, totals taken from the position rather than the truncated move list) and the fenKey guard. Pure — needs no DB despite living beside the integration tests |
@@ -68,3 +69,23 @@ These exist because the failure they prevent is **silent**:
 - There is currently **no component/E2E test layer**. Changes to session UI need manual
   verification — and there are [three drill implementations](../03-domain/srs-drilling.md#three-drill-implementations-known-debt)
   to check.
+
+## Integration tests share your dev database
+
+`apps/api` tests run against the `DATABASE_URL` in `apps/api/.env` — the same database the
+dev server uses. There is no separate test database and no transaction rollback, so a test
+that creates rows must delete them itself.
+
+Two rules, both learned from a real leak:
+
+- **The cleanup list accumulates across the whole file.** Ids are pushed as repertoires
+  are created and deleted in `afterAll`. A `beforeEach` that resets that list pairs
+  wrongly with an `afterAll` cleanup — only the last test's ids survive to be deleted, and
+  every earlier test leaves a repertoire behind on **every run**. The suite still passes,
+  so the only symptom is a slowly growing list of `phase7-invariant …` rows in the app.
+  That bug shipped and produced ten junk repertoires before anyone looked.
+- **Never operate on `DEFAULT_USER_ID` destructively.** Anything testing a bulk or
+  unscoped delete creates its own throwaway user row and cleans that up instead —
+  otherwise `pnpm test` eats the developer's own repertoires, which is exactly the
+  failure the code under test is capable of.
+

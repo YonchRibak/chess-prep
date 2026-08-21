@@ -23,6 +23,15 @@ card fields.
 Note `srsCards` is keyed by `moveId`, not card `id` — consistent with "one card per
 move".
 
+**Deleting has to reach IndexedDB too.** `deleteRepertoire` clears that repertoire's
+snapshot, and `clearAllRepertoireDataLocal()` (behind the store's `deleteAllRepertoires`)
+clears `repertoires`, `srsCards`, `drillAttempts` and **both queues** in one transaction.
+The queues are the part that is easy to miss: a pending push for a deleted move retries
+against a 404 on every reconnect for the rest of the session, because offline-first means
+the queue outlives the thing it refers to unless something clears it. `openingNames` and
+`meta` survive — the ECO cache is not user data, and dropping it would cost a cold session
+its offline scopes.
+
 ## The sync loop
 
 [apps/web/src/lib/srs/sync.ts](../../apps/web/src/lib/srs/sync.ts):

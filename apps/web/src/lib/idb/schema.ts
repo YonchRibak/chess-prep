@@ -153,6 +153,35 @@ export async function deleteRepertoireLocal(id: string): Promise<void> {
   await db.delete('repertoires', id);
 }
 
+/**
+ * Wipe every repertoire-derived local store: the cached snapshots, all SRS
+ * cards, the attempt log, and both outbound queues.
+ *
+ * Only correct after *every* repertoire is gone server-side. The cards and
+ * attempts are keyed by `moveId`, which no longer resolves to anything, and a
+ * pending push for a deleted move would retry against a 404 on every reconnect
+ * for the rest of the session — offline-first means the queue outlives the
+ * thing it refers to unless something clears it.
+ *
+ * `openingNames` and `meta` are deliberately kept: the ECO name cache is not
+ * user data, and re-fetching it would cost a cold session its offline scopes.
+ */
+export async function clearAllRepertoireDataLocal(): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(
+    ['repertoires', 'srsCards', 'pushQueue', 'drillAttempts', 'attemptQueue'],
+    'readwrite',
+  );
+  await Promise.all([
+    tx.objectStore('repertoires').clear(),
+    tx.objectStore('srsCards').clear(),
+    tx.objectStore('pushQueue').clear(),
+    tx.objectStore('drillAttempts').clear(),
+    tx.objectStore('attemptQueue').clear(),
+    tx.done,
+  ]);
+}
+
 /* ---------------- meta ---------------- */
 
 export async function getMeta(key: string): Promise<string | undefined> {

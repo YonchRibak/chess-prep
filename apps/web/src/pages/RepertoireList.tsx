@@ -13,7 +13,10 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../store/app.ts';
 import { Btn, Card, OverflowMenu } from '../components/ui.tsx';
-import { ImportPgnModal } from '../components/RepertoireModals.tsx';
+import {
+  DeleteAllRepertoiresModal,
+  ImportPgnModal,
+} from '../components/RepertoireModals.tsx';
 import { api, type RepertoireSummary } from '../api/client.ts';
 import {
   getAllCardsLocal,
@@ -29,11 +32,14 @@ export function RepertoireList() {
   const openRepertoire = useAppStore((s) => s.openRepertoire);
   const importPgn = useAppStore((s) => s.importPgn);
   const deleteRepertoire = useAppStore((s) => s.deleteRepertoire);
+  const deleteAllRepertoires = useAppStore((s) => s.deleteAllRepertoires);
   const renameRepertoire = useAppStore((s) => s.renameRepertoire);
   const exportPgn = useAppStore((s) => s.exportPgn);
   const go = useAppStore((s) => s.go);
 
   const [showImport, setShowImport] = useState(false);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [stats, setStats] = useState<Map<string, RepStats>>(new Map());
 
@@ -128,6 +134,15 @@ export function RepertoireList() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Repertoires</h2>
         <div className="flex gap-2">
+          {repertoires.length > 0 && (
+            <Btn
+              variant="ghost"
+              className="text-rose-300 hover:bg-rose-950/40"
+              onClick={() => setShowDeleteAll(true)}
+            >
+              Delete all
+            </Btn>
+          )}
           <Btn variant="ghost" onClick={() => setShowImport(true)}>
             Import PGN
           </Btn>
@@ -281,6 +296,35 @@ export function RepertoireList() {
             );
           })}
         </ul>
+      )}
+
+      {notice && (
+        <p className="text-xs text-slate-400 border border-slate-800 rounded px-2 py-1.5">
+          {notice}
+        </p>
+      )}
+
+      {showDeleteAll && (
+        <DeleteAllRepertoiresModal
+          repertoireCount={repertoires.length}
+          // Card totals come from the local store, so they are only known once
+          // per-repertoire stats have loaded. Showing a wrong number in a
+          // destructive confirmation is worse than showing none.
+          cardCount={
+            stats.size === repertoires.length
+              ? [...stats.values()].reduce((n, s) => n + s.totalCards, 0)
+              : null
+          }
+          onClose={() => setShowDeleteAll(false)}
+          onConfirm={async () => {
+            const deleted = await deleteAllRepertoires();
+            setShowDeleteAll(false);
+            setStats(new Map());
+            setNotice(
+              `Deleted ${deleted} repertoire${deleted === 1 ? '' : 's'} and their cards.`,
+            );
+          }}
+        />
       )}
 
       {showImport && (

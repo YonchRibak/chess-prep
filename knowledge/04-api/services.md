@@ -29,6 +29,7 @@ The largest and most careful file. Key shapes:
 | `appendRefutation` | Phase 9d shadow line: same walk, **no cards, no prep-slot check**. See below |
 | `patchMove` | comment / annotation / isMainLine / priority / **isDropped** |
 | `deleteMove` | Cascades to the move's SRS card |
+| `deleteAllRepertoires` | Bulk wipe — one statement, see below |
 | `importPgn` / `exportPgn` | Via `pgnToTree` / `treeToPgn` from shared |
 | `patchDrillRules` | Merges partial `DrillRules` |
 | `enforceOnePrepPerUserPosition` | The invariant guard — see below |
@@ -84,6 +85,21 @@ Reuse rules where the walk meets existing edges — `promoteIfShadowed`:
 
 `exportPgn` filters shadow lines out. See
 [srs-drilling](../03-domain/srs-drilling.md#refutation-shadow-lines-phase-9d).
+
+### `deleteAllRepertoires`
+
+A single `DELETE … WHERE user_id = $1` returning the row count, **not** a loop over
+`deleteRepertoire`. A loop that dies on repertoire 7 of 12 leaves the user looking at a
+half-deleted list with no way to tell which half went; one statement either happens or
+does not. Positions, moves and SRS cards cascade from the repertoire row.
+
+It returns `deleted` so the UI reports what the *database* did rather than what the list
+it rendered implied — those differ whenever another tab got there first.
+
+The `where user_id` clause is the whole safety property, and it is the one thing a passing
+"did it delete?" test would not catch. [deleteAll.test.ts](../../apps/api/src/services/deleteAll.test.ts)
+therefore runs against a throwaway user and asserts a bystander user's repertoire
+survives.
 
 ### `patchMove` and retagging
 

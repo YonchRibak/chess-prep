@@ -220,6 +220,26 @@ export async function deleteRepertoire(userId: string, id: string): Promise<void
   if (result.length === 0) throw new HttpError(404, 'Repertoire not found');
 }
 
+/**
+ * Delete every repertoire this user owns, in one statement.
+ *
+ * A single `DELETE ... WHERE user_id = $1` rather than a loop over
+ * `deleteRepertoire`, so the wipe is atomic: a loop that fails on repertoire 7
+ * of 12 leaves the user staring at a half-deleted list with no way to tell
+ * which half went. Positions, moves and SRS cards all cascade from the
+ * repertoire row (see the schema's `onDelete: 'cascade'`).
+ *
+ * Returns the count so the UI can report what actually happened instead of
+ * assuming the list it rendered was current.
+ */
+export async function deleteAllRepertoires(userId: string): Promise<{ deleted: number }> {
+  const rows = await db
+    .delete(repertoires)
+    .where(eq(repertoires.userId, userId))
+    .returning({ id: repertoires.id });
+  return { deleted: rows.length };
+}
+
 /* ---------------- moves ---------------- */
 
 export interface AddedMove {

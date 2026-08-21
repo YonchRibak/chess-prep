@@ -14,7 +14,7 @@
  * DATABASE_URL is configured.
  */
 import 'dotenv/config';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { DEFAULT_USER_ID, STARTING_FEN_KEY } from '@chess-prep/shared';
 
 const ENABLED = Boolean(process.env.DATABASE_URL);
@@ -25,13 +25,17 @@ describe('Phase 7 — one prep move per user-turn position (integration)', () =>
     return;
   }
 
-  // Track every repertoire created in this file so we cascade-clean even when
-  // an assertion throws mid-test.
+  // Every repertoire created in this file, cascade-cleaned in afterAll even
+  // when an assertion throws mid-test.
+  //
+  // It accumulates across the WHOLE file on purpose. Resetting it per test (a
+  // `beforeEach` doing `length = 0`) pairs wrongly with an `afterAll` cleanup:
+  // only the last test's ids would survive to be deleted, and every earlier
+  // test would leak a repertoire into the dev database on every run. That is
+  // silent — the suite still passes — and it is where the pile of
+  // `phase7-invariant …` rows came from.
   const repertoireIdsToCleanup: string[] = [];
 
-  beforeEach(() => {
-    repertoireIdsToCleanup.length = 0;
-  });
 
   afterAll(async () => {
     if (!ENABLED) return;

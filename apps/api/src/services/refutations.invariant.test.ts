@@ -11,7 +11,7 @@
  * Skips if no DATABASE_URL is configured.
  */
 import 'dotenv/config';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { DEFAULT_USER_ID, STARTING_FEN_KEY } from '@chess-prep/shared';
 
 const ENABLED = Boolean(process.env.DATABASE_URL);
@@ -24,9 +24,6 @@ describe('Phase 9d — refutation shadow lines are stored but never prep (integr
 
   const repertoireIdsToCleanup: string[] = [];
 
-  beforeEach(() => {
-    repertoireIdsToCleanup.length = 0;
-  });
 
   afterAll(async () => {
     if (!ENABLED) return;

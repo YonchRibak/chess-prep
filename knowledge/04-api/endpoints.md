@@ -34,6 +34,7 @@ validation error from the service rather than a crash.
 | `GET /repertoires/:id` | — | `RepertoireFull` (summary + positions + moves) |
 | `PATCH /repertoires/:id` | `{ name?, tags?, autoExpand? }` | summary |
 | `DELETE /repertoires/:id` | — | `204` |
+| `DELETE /repertoires` | — | `200 { deleted }`. **Wipes every repertoire of the user**, atomically. Its own path, not a flag on the single delete |
 | `POST /repertoires/:id/moves` | `{ parentFenKey, san, isMainLine?, onConflict?, lineTags? }` | `201 AddedMove` |
 | `POST /repertoires/:id/moves/batch` | `{ fromFenKey, sans[], onConflict?, lineTags? }` | `201 { added, reused, ... }` |
 | `POST /repertoires/:id/refutations` | `{ fromFenKey, sans[] }` | `201 { added, reused, ... }`. Phase 9d shadow line — stored, never carded, never prep |

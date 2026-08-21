@@ -6,7 +6,11 @@ import {
   type RepertoireSummary,
 } from '../api/client.ts';
 import type { Color, DrillMode, DrillRules } from '@chess-prep/shared';
-import { putRepertoireLocal } from '../lib/idb/schema.ts';
+import {
+  clearAllRepertoireDataLocal,
+  deleteRepertoireLocal,
+  putRepertoireLocal,
+} from '../lib/idb/schema.ts';
 
 export type View =
   | { kind: 'list' }
@@ -46,6 +50,8 @@ interface AppStore {
   /** Phase 9c: opt this repertoire in/out of silent opponent auto-expansion. */
   setAutoExpand(id: string, autoExpand: boolean): Promise<void>;
   deleteRepertoire(id: string): Promise<void>;
+  /** Delete every repertoire, server and local stores both. Returns how many went. */
+  deleteAllRepertoires(): Promise<number>;
   /** Load a repertoire into `active` WITHOUT changing the view (router/deep links). */
   loadRepertoire(id: string): Promise<void>;
   openRepertoire(id: string): Promise<void>;
@@ -123,10 +129,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   async deleteRepertoire(id) {
     await api.deleteRepertoire(id);
+    // Drop the offline snapshot too, or the repertoire keeps rendering from
+    // IndexedDB on the next cold load and looks resurrected.
+    await deleteRepertoireLocal(id);
     if (get().active?.id === id) {
       set({ active: null, view: { kind: 'list' } });
     }
     await get().loadList();
+  },
+
+  async deleteAllRepertoires() {
+    const { deleted } = await api.deleteAllRepertoires();
+    // Server first, local second: if the request fails we have thrown before
+    // touching IndexedDB, so the offline copy still matches the server.
+    await clearAllRepertoireDataLocal();
+    set({ active: null, view: { kind: 'list' } });
+    await get().loadList();
+    return deleted;
   },
 
   async loadRepertoire(id) {
