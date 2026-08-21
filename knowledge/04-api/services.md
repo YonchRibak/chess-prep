@@ -33,6 +33,7 @@ The largest and most careful file. Key shapes:
 | `importPgn` / `exportPgn` | Via `pgnToTree` / `treeToPgn` from shared |
 | `patchDrillRules` | Merges partial `DrillRules` |
 | `enforceOnePrepPerUserPosition` | The invariant guard — see below |
+| `isUuid` / `ensureIdFound` | Id-shape validation at the boundary — see below |
 
 ### `addMove` flow
 
@@ -85,6 +86,27 @@ Reuse rules where the walk meets existing edges — `promoteIfShadowed`:
 
 `exportPgn` filters shadow lines out. See
 [srs-drilling](../03-domain/srs-drilling.md#refutation-shadow-lines-phase-9d).
+
+### Malformed ids
+
+Postgres rejects a bad uuid at the **cast**, before any row is considered, so a raw path
+parameter reaching a uuid column produced `500 Internal error` for what is an ordinary
+client typo. Guarded at the service boundary, and the *kind* of id decides the answer:
+
+| Where the id came from | Answer | Why |
+|---|---|---|
+| Path parameter naming a resource (`/repertoires/:id`, `…/moves/:moveId`) | **404**, message identical to a valid-but-absent id | The two become indistinguishable, so no client branches on whether an id is *shaped* right, and the error body doesn't advertise the id format |
+| Query filter (`?repertoireId=`) | **400 invalid repertoireId** | The request is malformed; the resource isn't missing. A well-formed filter matching nothing stays a valid empty result |
+| Id inside a sync batch (`POST /srs/cards`, `/srs/attempts`) | **Skipped**, batch succeeds | These are the offline queues draining; one bad row must not block every real grade behind it |
+
+The batch case is skipped *silently* — `ignored` counts only rows that reached the
+ownership check. Harmless today because the client clears its queue regardless of the
+totals, but it means the number under-reports.
+
+Guards: `ensureIdFound()` for the 404 case, `isUuid()` for the other two, both in
+[repertoires.ts](../../apps/api/src/services/repertoires.ts). Any new by-id service needs
+one — the failure is a 500, not a wrong answer, so it shows up as an alarm rather than
+silently.
 
 ### `deleteAllRepertoires`
 

@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { FsrsState, SrsCardDto } from '@chess-prep/shared';
 import { db } from '../db/client.js';
 import { srsCards, moves } from '../db/schema.js';
-import { HttpError } from './repertoires.js';
+import { HttpError, isUuid } from './repertoires.js';
 
 function toDto(c: typeof srsCards.$inferSelect): SrsCardDto {
   return {
@@ -38,6 +38,9 @@ export async function pullCards(
   }
 
   if (repertoireId) {
+    // A filter, not a resource: a malformed one is a bad request, not a 404.
+    // Without this Postgres rejects the uuid cast and the whole pull 500s.
+    if (!isUuid(repertoireId)) throw new HttpError(400, 'invalid repertoireId');
     // Join cards → moves → filter on repertoire_id.
     const rows = await db
       .select({ card: srsCards })
@@ -86,7 +89,13 @@ export async function pushCards(
     const moveId = String(r.moveId ?? '');
     const due = toDate(r.due);
     const updatedAt = toDate(r.updatedAt);
-    if (!moveId || !due || !updatedAt) continue;
+    // A non-uuid moveId is skipped like any other malformed row rather than
+    // rejecting the batch: this is the offline push queue draining, and one bad
+    // entry must not block every real grade behind it. (Note the response's
+    // `ignored` counts only rows that survived to the ownership check, so a row
+    // dropped here is invisible in the totals — harmless today because the
+    // client clears the queue unconditionally.)
+    if (!isUuid(moveId) || !due || !updatedAt) continue;
     incoming.push({
       moveId,
       due,

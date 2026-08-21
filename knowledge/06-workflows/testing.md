@@ -33,6 +33,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | File | Guards |
 |---|---|
 | [repertoires.invariant.test.ts](../../apps/api/src/services/repertoires.invariant.test.ts) | One-prep-per-user-turn-position, including the `swap` path |
+| [malformedIds.test.ts](../../apps/api/src/services/malformedIds.test.ts) | That a malformed uuid is a 404 on every by-id service (paired against a valid-but-absent id, so the two stay indistinguishable), a 400 on a query filter, and a skip inside a sync batch — never the `500` the raw uuid cast used to produce. The `isUuid` half needs no database |
 | [deleteAll.test.ts](../../apps/api/src/services/deleteAll.test.ts) | That `deleteAllRepertoires` wipes its own user's repertoires and cascades their cards — and, the assertion that actually matters, that a **bystander user's** repertoire survives. A missing `where user_id` passes every "did it delete?" check and fails only this one. Runs against a throwaway user, never `DEFAULT_USER_ID` |
 | [refutations.invariant.test.ts](../../apps/api/src/services/refutations.invariant.test.ts) | Phase 9d, the whole feature stated as what must **not** happen: no card for any ply of a shadow line, no claim on the one prep slot, omitted from PGN export, promotion to prep is one-way, idempotent re-save, and the ply cap is enforced |
 | [import-openings.parity.test.ts](../../apps/api/src/scripts/import-openings.parity.test.ts) | Importer rows match `fenKey()`-normalized lookups, byte for byte |

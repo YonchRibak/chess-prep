@@ -80,6 +80,30 @@ function ensureNonEmptyName(name: unknown): string {
   return name.trim();
 }
 
+/**
+ * Postgres rejects a malformed uuid at the cast, before any row is considered —
+ * a `22P02` that surfaced as a 500 on every `/:id` route. A caller passing
+ * garbage gets the same answer as one passing a well-formed id that does not
+ * exist, deliberately: the two are indistinguishable to a client, so nothing
+ * has to branch on whether an id is *shaped* right, and the id format is not
+ * advertised in an error body.
+ *
+ * Use for path parameters that name a resource. For query filters and request
+ * bodies see `isUuid` — a malformed filter is a bad request, not a missing
+ * thing.
+ */
+function ensureIdFound(value: string, what: string): void {
+  if (!isUuid(value)) throw new HttpError(404, `${what} not found`);
+}
+
+/** Shape test only — says nothing about whether the row exists. */
+export function isUuid(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
 export async function listRepertoires(userId: string): Promise<RepertoireSummary[]> {
   const rows = await db
     .select()
@@ -156,6 +180,7 @@ export async function createRepertoire(
 }
 
 export async function getRepertoire(userId: string, id: string): Promise<RepertoireFull> {
+  ensureIdFound(id, 'Repertoire');
   const rep = await db.query.repertoires.findFirst({
     where: and(eq(repertoires.id, id), eq(repertoires.userId, userId)),
   });
@@ -193,6 +218,7 @@ export async function patchRepertoire(
   id: string,
   input: { name?: unknown; tags?: unknown; autoExpand?: unknown },
 ): Promise<RepertoireSummary> {
+  ensureIdFound(id, 'Repertoire');
   const update: Partial<{ name: string; tags: string[]; autoExpand: boolean; updatedAt: Date }> = {
     updatedAt: new Date(),
   };
@@ -213,6 +239,7 @@ export async function patchRepertoire(
 }
 
 export async function deleteRepertoire(userId: string, id: string): Promise<void> {
+  ensureIdFound(id, 'Repertoire');
   const result = await db
     .delete(repertoires)
     .where(and(eq(repertoires.id, id), eq(repertoires.userId, userId)))
@@ -272,6 +299,7 @@ export async function addMove(
     lineTags?: unknown;
   },
 ): Promise<AddedMove> {
+  ensureIdFound(repertoireId, 'Repertoire');
   if (typeof input.parentFenKey !== 'string') throw new HttpError(400, 'parentFenKey is required');
   if (typeof input.san !== 'string') throw new HttpError(400, 'san is required');
   const onConflict = parseOnConflict(input.onConflict);
@@ -430,6 +458,7 @@ export async function appendLine(
   repertoireId: string,
   input: { fromFenKey: unknown; sans: unknown; onConflict?: unknown; lineTags?: unknown },
 ): Promise<{ added: number; reused: number; finalFenKey: string }> {
+  ensureIdFound(repertoireId, 'Repertoire');
   if (typeof input.fromFenKey !== 'string') throw new HttpError(400, 'fromFenKey is required');
   if (!Array.isArray(input.sans) || input.sans.some((s) => typeof s !== 'string')) {
     throw new HttpError(400, 'sans must be an array of strings');
@@ -486,6 +515,7 @@ export async function appendRefutation(
   repertoireId: string,
   input: { fromFenKey: unknown; sans: unknown },
 ): Promise<{ added: number; reused: number; finalFenKey: string }> {
+  ensureIdFound(repertoireId, 'Repertoire');
   if (typeof input.fromFenKey !== 'string') throw new HttpError(400, 'fromFenKey is required');
   if (!Array.isArray(input.sans) || input.sans.some((s) => typeof s !== 'string')) {
     throw new HttpError(400, 'sans must be an array of strings');
@@ -542,6 +572,8 @@ export async function patchMove(
     lineTags?: unknown;
   },
 ): Promise<void> {
+  ensureIdFound(repertoireId, 'Repertoire');
+  ensureIdFound(moveId, 'Move');
   // Verify ownership via join: look up the move and check the repertoire.
   const move = await db.query.moves.findFirst({
     where: and(eq(moves.id, moveId), eq(moves.repertoireId, repertoireId)),
@@ -596,6 +628,8 @@ export async function patchMove(
 }
 
 export async function deleteMove(userId: string, repertoireId: string, moveId: string): Promise<void> {
+  ensureIdFound(repertoireId, 'Repertoire');
+  ensureIdFound(moveId, 'Move');
   const rep = await db.query.repertoires.findFirst({
     where: and(eq(repertoires.id, repertoireId), eq(repertoires.userId, userId)),
   });
@@ -728,6 +762,7 @@ export async function patchDrillRules(
   id: string,
   rules: unknown,
 ): Promise<RepertoireSummary> {
+  ensureIdFound(id, 'Repertoire');
   if (!rules || typeof rules !== 'object') {
     throw new HttpError(400, 'drillRules must be an object');
   }
@@ -751,6 +786,7 @@ export async function patchDrillRules(
 }
 
 export async function exportPgn(userId: string, repertoireId: string): Promise<string> {
+  ensureIdFound(repertoireId, 'Repertoire');
   const full = await getRepertoire(userId, repertoireId);
   const tree: RepertoireTree = {
     rootFenKey: full.rootFenKey as FenKey,

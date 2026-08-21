@@ -2,7 +2,7 @@ import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import type { DrillAttemptDto } from '@chess-prep/shared';
 import { db } from '../db/client.js';
 import { drillAttempts, moves } from '../db/schema.js';
-import { HttpError } from './repertoires.js';
+import { HttpError, isUuid } from './repertoires.js';
 
 /** Hard cap on one pull, so a long-lived log can never blow up a sync response. */
 const MAX_PULL = 5000;
@@ -41,7 +41,10 @@ export async function recordAttempts(
     const moveId = String(r.moveId ?? '');
     const playedSan = String(r.playedSan ?? '').trim();
     const at = toDate(r.at) ?? new Date();
-    if (!moveId || !playedSan) continue;
+    // Skipped, not rejected — see the same rule in srs.pushCards: this is the
+    // offline attempt queue draining, and one malformed row must not block the
+    // rest of the log. Like there, it does not show up in `ignored`.
+    if (!isUuid(moveId) || !playedSan) continue;
     incoming.push({ moveId, playedSan, wasCorrect: Boolean(r.wasCorrect), at });
   }
   if (incoming.length === 0) return { accepted: 0, ignored: 0 };
@@ -83,7 +86,12 @@ export async function listAttempts(
     if (Number.isNaN(since.getTime())) throw new HttpError(400, 'invalid since');
     where = and(where, gte(drillAttempts.at, since))!;
   }
-  if (repertoireId) where = and(where, eq(drillAttempts.repertoireId, repertoireId))!;
+  // A filter, not a resource — malformed is a bad request (and would otherwise
+  // 500 on the uuid cast).
+  if (repertoireId) {
+    if (!isUuid(repertoireId)) throw new HttpError(400, 'invalid repertoireId');
+    where = and(where, eq(drillAttempts.repertoireId, repertoireId))!;
+  }
 
   const rows = await db
     .select()
