@@ -27,6 +27,20 @@ Legend: ✅ done · ⏸ parked
 
 **End of Phase 8 is the real MVP** and it is reached. Everything below is additive.
 
+## Flow phases (F1–F4)
+
+Restructuring the app around intent instead of mechanism — see
+[FLOW_PROPOSAL.md](../../FLOW_PROPOSAL.md) and
+[FLOW_IMPLEMENTATION_PLAN.md](../../FLOW_IMPLEMENTATION_PLAN.md). Lettered to avoid
+colliding with parked Phases 10/11.
+
+| Phase | Status | What it is |
+|---|---|---|
+| **F1** ✅ | Session-scoped line scope (the stored scope demoted to default; daily-diet footgun killed) + line navigator (`#/lines/:id/train\|grow`) with per-line badges |
+| **F2** ✅ | Guided prepare: `#/prepare` wizard, `PrepTarget` presets, line-first traversal (`findNextBuildNodeLineFirst`), session-forced auto-expand, lock-in micro-rehearsal, structural coverage-to-target meter |
+| **F3** | Bundled explorer snapshot (frequency floor for the dev-401 machine / offline) + game-weighted coverage |
+| **F4** | Smart default Train queue + home re-org (Train / Prepare / Grow) + terminology pass |
+
 ## Known debt (deliberately deferred)
 
 - **Three drill implementations** — classic `DrillSession`, the walker's drill seed, and

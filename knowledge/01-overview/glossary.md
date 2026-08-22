@@ -42,3 +42,12 @@ Terms used consistently across code, spec, and these docs.
 | **Interference** | Playing the SAN that is your correct prep at a *different* position. The common transposition confusion, named to the user on a miss. [srs-drilling](../03-domain/srs-drilling.md#mistake-rehearsal-phase-9d) | ✅ built |
 | **Mistakes mode** | `DrillMode` value selecting recently-missed cards, recency-weighted, ignoring the due date. Composes with a line scope. | ✅ built |
 | **Shadow line** | A stored refutation of a mistake: the engine's punishment, up to `MAX_REFUTATION_PLIES` deep, marked `moves.is_refutation`. Never prep, never carded, never walked, never exported. [srs-drilling](../03-domain/srs-drilling.md#refutation-shadow-lines-phase-9d) | ✅ built |
+
+## Flow (F-phase) terms
+
+| Term | Meaning |
+|---|---|
+| **Guided session** | A build walker session launched by the Prepare wizard (`walker-session` with `guided`): line-first traversal, auto-expansion forced on for the session, reply selection parameterized by the prep target, lock-in after each line. [walker](../03-domain/walker.md#guided-prepare-flow-f2) |
+| **Prep target** | The guided session's finish line: a reply-share floor (`minShare`) plus a depth cap (`maxDepthPlies`). Presets in [prep.ts](../../packages/shared/src/prep.ts); persisted per repertoire inside `drill_rules.prepTarget` (an accepted misfiling — it's a growth setting, kept there to stay migration-free). |
+| **Lock-in** | The micro-rehearsal after a line is built: replay exactly those moves, graded with real FSRS grades and logged attempts, then back to building. Closes the "decide *and then rehearse*" gap. |
+| **Session scope** | Flow F1: a line scope carried by the view/hash for one session, never written to stored rules. [srs-drilling](../03-domain/srs-drilling.md#session-scope-vs-stored-scope-flow-f1) |

@@ -22,14 +22,25 @@ export type View =
   // default) — so a one-night focus can't silently reshape the daily diet.
   | { kind: 'drill-session'; repertoireId: string; mode: DrillMode; scope?: LineScope }
   // Phase 7: unified Build/Drill walker. `seed` decides which queue the walker
-  // pulls from; the per-node UX is identical.
-  | { kind: 'walker-session'; repertoireId: string; seed: 'build' | 'drill'; scope?: LineScope }
+  // pulls from; the per-node UX is identical. Flow F2: `guided` marks a
+  // guided-prepare build session — line-first traversal, auto-expand forced on
+  // for the session, lock-in rehearsal; the prep target is read from the
+  // repertoire's stored `drillRules.prepTarget`.
+  | {
+      kind: 'walker-session';
+      repertoireId: string;
+      seed: 'build' | 'drill';
+      scope?: LineScope;
+      guided?: boolean;
+    }
   // Phase 8a: daily diet — mixed session across all repertoires for a side.
   | { kind: 'daily' }
   | { kind: 'health-check'; repertoireId: string }
   // Flow F1: line navigator — pick which line to train/grow; each row starts a
   // session-scoped walker session.
-  | { kind: 'lines'; repertoireId: string; intent: 'train' | 'grow' };
+  | { kind: 'lines'; repertoireId: string; intent: 'train' | 'grow' }
+  // Flow F2: the "Prepare against…" wizard.
+  | { kind: 'prepare' };
 
 interface AppStore {
   view: View;

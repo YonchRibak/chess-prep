@@ -43,6 +43,16 @@ describe('viewToHash / hashToView round-trip', () => {
     { kind: 'health-check', repertoireId: 'abc' },
     { kind: 'lines', repertoireId: 'abc', intent: 'train' },
     { kind: 'lines', repertoireId: 'abc', intent: 'grow' },
+    { kind: 'prepare' },
+    // Flow F2: guided flag, alone and together with a scope.
+    { kind: 'walker-session', repertoireId: 'abc', seed: 'build', guided: true },
+    {
+      kind: 'walker-session',
+      repertoireId: 'abc',
+      seed: 'build',
+      scope: { kind: 'openingName', value: 'Caro-Kann Defense' },
+      guided: true,
+    },
   ];
 
   for (const v of views) {
@@ -102,5 +112,24 @@ describe('hashToView — plain paths unchanged', () => {
   it('root hash is the list', () => {
     expect(hashToView('#/')).toEqual({ kind: 'list' });
     expect(hashToView('')).toEqual({ kind: 'list' });
+  });
+
+  it("guided is only true for guided=1 — anything else parses as un-guided", () => {
+    expect(hashToView('#/walker/abc/build?guided=1')).toEqual({
+      kind: 'walker-session',
+      repertoireId: 'abc',
+      seed: 'build',
+      guided: true,
+    });
+    expect(hashToView('#/walker/abc/build?guided=0')).toEqual({
+      kind: 'walker-session',
+      repertoireId: 'abc',
+      seed: 'build',
+    });
+    expect(hashToView('#/walker/abc/build?guided=yes')).toEqual({
+      kind: 'walker-session',
+      repertoireId: 'abc',
+      seed: 'build',
+    });
   });
 });

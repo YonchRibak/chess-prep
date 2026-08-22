@@ -6,6 +6,7 @@
  */
 
 import { ALL_LINES, type LineScope } from './scope.js';
+import { DEFAULT_PREP_TARGET, type PrepTarget } from './prep.js';
 
 export type FsrsState = 0 | 1 | 2 | 3; // new | learning | review | relearning
 
@@ -67,6 +68,12 @@ export interface DrillRules {
    * the depth and branching rules above. See scope.ts.
    */
   scope?: LineScope;
+  /**
+   * Flow F2: the repertoire's last-used guided-prepare target. NOT a drill
+   * rule — it lives here so it persists per-repertoire without a migration
+   * (see prep.ts for why the wart is accepted). Drill queues ignore it.
+   */
+  prepTarget?: PrepTarget;
 }
 
 export const DEFAULT_DRILL_RULES: Required<DrillRules> = {
@@ -76,6 +83,7 @@ export const DEFAULT_DRILL_RULES: Required<DrillRules> = {
   blindfold: false,
   evalAfterAnswer: false,
   scope: ALL_LINES,
+  prepTarget: DEFAULT_PREP_TARGET,
 };
 
 export function mergeDrillRules(rules: DrillRules | undefined | null): Required<DrillRules> {

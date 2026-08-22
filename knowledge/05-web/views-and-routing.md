@@ -18,11 +18,14 @@ type View =
   | { kind: 'daily' }
   | { kind: 'health-check';  repertoireId: string }
   | { kind: 'lines';         repertoireId: string; intent: 'train' | 'grow' }
+  | { kind: 'prepare' }
 ```
 
 The optional `scope` on the two session views is the **Flow F1 session-scoped
 override**: it narrows that one session and is never written back to the stored
 `drillRules` (see [srs-drilling.md](../03-domain/srs-drilling.md#line-scopes-phase-9a)).
+`walker-session` additionally takes `guided?: boolean` — the **Flow F2 guided-prepare
+mode** ([walker](../03-domain/walker.md#guided-prepare-flow-f2)).
 
 Navigate with `useAppStore.getState().go(view)` — never by setting the hash directly.
 
@@ -44,6 +47,7 @@ Adding a view means touching four places: the union, `viewToHash`, `hashToView`,
 | `daily` | [DailyDiet.tsx](../../apps/web/src/pages/DailyDiet.tsx) |
 | `health-check` | [HealthCheck.tsx](../../apps/web/src/pages/HealthCheck.tsx) |
 | `lines` | [LineNavigator.tsx](../../apps/web/src/pages/LineNavigator.tsx) — Flow F1: per-line due/toBuild badges; each row starts a session-scoped walker session |
+| `prepare` | [PrepareWizard.tsx](../../apps/web/src/pages/PrepareWizard.tsx) — Flow F2: search target → infer color → extend/create (fenKey match decides) → prep target → launch a guided session. Commits the stem *before* launching, because a scoped build can't start a line that doesn't exist |
 
 ## Hash routing
 
@@ -60,7 +64,11 @@ and syncs both directions.
 #/walker/:id/:seed     walker (seed ∈ build|drill)
 #/health/:id           health check
 #/lines/:id/:intent    line navigator (intent ∈ train|grow)
+#/prepare              Prepare wizard (Flow F2)
 ```
+
+Walker hashes also accept `guided=1` (`#/walker/:id/build?guided=1&scope=…`) —
+anything other than exactly `1` parses as un-guided.
 
 The drill and walker hashes accept an optional `?scope=kind:value` suffix
 (URI-encoded; only the *first* colon separates kind from value, since book names

@@ -67,6 +67,12 @@ falls back to book continuations. The cap is what stops Phase 9c auto-expansion 
 exploding the frontier: opponent moves carry no SRS card, but each still widens the set of
 positions the user will later be asked about.
 
+The `policy?` param is how Flow F2's **prep targets** plug in: a guided session passes
+`{ minShare }` from the repertoire's `drillRules.prepTarget`
+([prep.ts](../../packages/shared/src/prep.ts) presets: 5% / 2% / 20%) through
+`getOpponentCandidates({ policy })`, so "broader" preps rarer replies and "main lines"
+fewer — same selection mechanism, different floor.
+
 **`rankUserCandidates(engineLines, entry, sideToMove, policy?)`** — engine first. Moves
 more than 50cp below the engine's best are dropped outright, so a popular-but-bad move can
 never surface. Among the survivors, which the engine considers near-equivalent, the more

@@ -100,6 +100,41 @@ precedence order in
 [srs-drilling](srs-drilling.md#session-scope-vs-stored-scope-flow-f1). The session
 never writes the scope back.
 
+## Guided prepare (Flow F2)
+
+A **guided session** (`walker-session` with `guided`, launched by the
+[Prepare wizard](../05-web/views-and-routing.md)) changes three things about the build
+seed, none of them by new mechanism:
+
+1. **Line-first traversal.** `findNextBuildNodeLineFirst(rep, indices, options)` —
+   a pure sibling of `findNextBuildNode`, same scope/skip semantics plus
+   `lastReachedFenKey` (continue the branch just extended) and `maxDepthPlies`
+   (the prep target's depth cap). Order: finish the current branch depth-first
+   (main line before alternatives), backtrack to the nearest ancestor with an
+   unexplored sibling, and only BFS to the shallowest gap when nothing is in
+   progress. BFS round-robin remains the default for un-scoped Grow — balanced
+   growth is the right default; line-at-a-time is right when the user asked to
+   prepare against one thing. Returns `null` when the scoped, capped subtree is
+   covered — the guided session's "done".
+2. **Auto-expansion forced on for the session** — a walk-time override, never a
+   write to `repertoires.auto_expand`. All three 9c guarantees sit below the
+   flag and hold unchanged. Reply selection is parameterized by the prep
+   target's `minShare` ([explorer](explorer.md)).
+3. **Lock-in micro-rehearsal.** When the line in progress ends (target depth,
+   sibling switch, or session end) or `LOCK_IN_MAX_PENDING` new moves
+   accumulate, the walker flips to a drill-style pass over exactly the user
+   moves just saved — replayed in line order on the persistent board, opponent
+   replies auto-playing between cards. Grading is the normal path (`gradeAndQueue`
+   + `logAttempt` — real FSRS state, real attempt log), and the phases are
+   engine-gated like every drill phase ([engine](engine.md#who-gates-what)).
+   The mini-queue is built from the session's own record of what it just
+   created, not from `buildDrillQueue` — the session knows the exact moves and
+   their order.
+
+`computeScopedCoverage(rep, indices, { scope, openingLookup, maxDepthPlies })`
+feeds the header's coverage-to-target meter (structural counts in F2; the
+game-weighted upgrade is F3).
+
 ## Drill seed
 
 The drill queue ([queue.ts](../../apps/web/src/lib/drill/queue.ts), oldest-due-first)

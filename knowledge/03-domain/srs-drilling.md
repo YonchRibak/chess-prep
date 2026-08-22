@@ -37,6 +37,7 @@ Per-repertoire, stored as partial jsonb, always read through `mergeDrillRules()`
 | `blindfold` | `false` | Hide pieces; show the move list only |
 | `evalAfterAnswer` | `false` | Reveal engine eval after grading |
 | `scope` | `{ kind: 'all' }` | Phase 9a line scope — see below. Composes with the rules above. Since Flow F1 this is only the **default**: a session-scoped override wins |
+| `prepTarget` | 5% / 12 plies | Flow F2: the repertoire's last-used guided-prepare target. **Not a drill rule** — drill queues ignore it; it lives here to persist per-repertoire without a migration ([prep.ts](../../packages/shared/src/prep.ts)). Validated on write next to `scope` |
 
 ## Line scopes (Phase 9a)
 
@@ -158,6 +159,9 @@ web wrapper [lib/drill/interference.ts](../../apps/web/src/lib/drill/interferenc
 
 Every answered card in **all three** drill implementations calls `logAttempt()` — correct
 and wrong alike. Correct attempts matter: they are how a repaired mistake decays out.
+Flow F2's **lock-in** pass ([walker](walker.md#guided-prepare-flow-f2)) grades and logs
+through the same path — its passes seed honest FSRS state and feed the mistakes mode,
+rather than being a cosmetic replay.
 
 **`rankMistakes(attempts, { now, windowDays, halfLifeDays })`** — each miss inside a
 14-day window contributes an exponentially decaying weight (7-day half-life); each correct

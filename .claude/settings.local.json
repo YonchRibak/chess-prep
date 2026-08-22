@@ -5,7 +5,11 @@
       "Bash(pnpm dev *)",
       "Bash(pnpm typecheck *)",
       "Bash(pnpm test *)",
-      "Bash(pnpm build *)"
+      "Bash(pnpm build *)",
+      "PowerShell(\\(Get-Content apps\\\\web\\\\src\\\\lib\\\\walker\\\\walker.test.ts | Measure-Object -Line\\).Lines; Get-Content apps\\\\web\\\\src\\\\lib\\\\walker\\\\walker.test.ts -Tail 10)",
+      "PowerShell(pnpm --filter @chess-prep/web test 2>&1)",
+      "PowerShell(pnpm --filter @chess-prep/shared test 2>&1)",
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f2.txt\")"
     ]
   }
 }

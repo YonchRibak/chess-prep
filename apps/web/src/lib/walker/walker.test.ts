@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   buildIndices,
   computeCoverage,
+  computeScopedCoverage,
   findNextBuildNode,
+  findNextBuildNodeLineFirst,
   findPathToPosition,
   pickOpponentReplyForDrill,
 } from './walker.ts';
@@ -417,5 +419,142 @@ describe('walker — refutation shadow lines', () => {
     const cov = computeCoverage(rep, buildIndices(rep));
     expect(cov.liveMoves).toBe(0);
     expect(cov.droppedMoves).toBe(0);
+  });
+});
+
+/* ---------------- Flow F2: line-first traversal + scoped coverage ---------------- */
+
+/**
+ * White repertoire, Caro-Kann-shaped fixture:
+ *
+ *   p0(w) -e4-> p1(b) -c6-> p2(w) -d4-> p3(b) -+-d5[adv]-> p4(w) -e5[adv]-> p6(b)  ← opponent-picks gap
+ *                                              +-g6------> p5(w)                    ← user-prep gap
+ *
+ * Depths: p4/p5 = 4, p6 = 5. The `adv` tag marks the d5 branch, mimicking
+ * insert-time tag inheritance.
+ */
+function lineFirstRep(): RepertoireFull {
+  return {
+    ...emptyRep('white'),
+    positions: [
+      { id: 'p0', fenKey: ROOT_KEY, fullFen: ROOT_FEN },
+      { id: 'p1', fenKey: 'k1', fullFen: 'pos b - - 0 1' },
+      { id: 'p2', fenKey: 'k2', fullFen: 'pos w - - 0 2' },
+      { id: 'p3', fenKey: 'k3', fullFen: 'pos b - - 0 2' },
+      { id: 'p4', fenKey: 'k4', fullFen: 'pos w - - 0 3' },
+      { id: 'p5', fenKey: 'k5', fullFen: 'pos w - - 0 3' },
+      { id: 'p6', fenKey: 'k6', fullFen: 'pos b - - 0 3' },
+    ],
+    moves: [
+      move({ id: 'm1', parentPositionId: 'p0', childPositionId: 'p1', san: 'e4', isMainLine: true }),
+      move({ id: 'm2', parentPositionId: 'p1', childPositionId: 'p2', san: 'c6' }),
+      move({ id: 'm3', parentPositionId: 'p2', childPositionId: 'p3', san: 'd4', isMainLine: true }),
+      move({ id: 'm4a', parentPositionId: 'p3', childPositionId: 'p4', san: 'd5', isMainLine: true, lineTags: ['adv'] }),
+      move({ id: 'm4b', parentPositionId: 'p3', childPositionId: 'p5', san: 'g6' }),
+      move({ id: 'm5', parentPositionId: 'p4', childPositionId: 'p6', san: 'e5', isMainLine: true, lineTags: ['adv'] }),
+    ],
+  };
+}
+
+describe('walker.findNextBuildNodeLineFirst (Flow F2)', () => {
+  it('continues down the branch just extended instead of jumping to a shallower gap', () => {
+    const rep = lineFirstRep();
+    const idx = buildIndices(rep);
+    // BFS would offer p5 (depth 4) first; line-first from p4 stays on the d5 line.
+    const node = findNextBuildNodeLineFirst(rep, idx, { lastReachedFenKey: 'k4' });
+    expect(node!.position.id).toBe('p6');
+    expect(node!.depth).toBe(5);
+    expect(node!.path.map((m) => m.san)).toEqual(['e4', 'c6', 'd4', 'd5', 'e5']);
+  });
+
+  it('backtracks to the nearest sibling branch when the line hits the depth cap', () => {
+    const rep = lineFirstRep();
+    const idx = buildIndices(rep);
+    // Cap 5: p6 (depth 5) is at target → not offered; the d5 line is done.
+    // Backtracking from p4 reaches p3 whose other child leads to p5.
+    const node = findNextBuildNodeLineFirst(rep, idx, {
+      lastReachedFenKey: 'k4',
+      maxDepthPlies: 5,
+    });
+    expect(node!.position.id).toBe('p5');
+  });
+
+  it('returns null when everything in the cap is covered — the guided "done" signal', () => {
+    const rep = lineFirstRep();
+    const idx = buildIndices(rep);
+    // Cap 4: both gaps (p5 at 4, p6 at 5) are at/past target.
+    const node = findNextBuildNodeLineFirst(rep, idx, {
+      lastReachedFenKey: 'k4',
+      maxDepthPlies: 4,
+    });
+    expect(node).toBeNull();
+  });
+
+  it('with nothing in progress, offers the shallowest gap (BFS order)', () => {
+    const rep = lineFirstRep();
+    const idx = buildIndices(rep);
+    const node = findNextBuildNodeLineFirst(rep, idx, {});
+    expect(node!.position.id).toBe('p5'); // depth 4 < p6 at 5
+  });
+
+  it('respects a line scope: out-of-scope gaps are never offered', () => {
+    const rep = lineFirstRep();
+    const idx = buildIndices(rep);
+    const node = findNextBuildNodeLineFirst(rep, idx, {
+      scope: { kind: 'tag', value: 'adv' },
+    });
+    expect(node!.position.id).toBe('p6'); // p5 in-edge g6 is untagged
+    const done = findNextBuildNodeLineFirst(rep, idx, {
+      scope: { kind: 'tag', value: 'adv' },
+      maxDepthPlies: 5,
+    });
+    expect(done).toBeNull(); // p6 capped, p5 out of scope
+  });
+
+  it('skips dropped subtrees entirely', () => {
+    const rep = lineFirstRep();
+    rep.moves = rep.moves.map((m) => (m.id === 'm4a' ? { ...m, isDropped: true } : m));
+    const idx = buildIndices(rep);
+    const node = findNextBuildNodeLineFirst(rep, idx, { lastReachedFenKey: 'k3' });
+    expect(node!.position.id).toBe('p5'); // p4/p6 unreachable past the dropped d5
+  });
+
+  it('never sees refutation shadow edges (movesByParent choke point)', () => {
+    const rep = lineFirstRep();
+    // A shadow edge out of p5 must not make p5 look covered.
+    rep.positions.push({ id: 'p7', fenKey: 'k7', fullFen: 'pos b - - 0 4' });
+    rep.moves.push(
+      move({ id: 'm-shadow', parentPositionId: 'p5', childPositionId: 'p7', san: 'h4', isRefutation: true }),
+    );
+    const idx = buildIndices(rep);
+    const node = findNextBuildNodeLineFirst(rep, idx, {});
+    expect(node!.position.id).toBe('p5');
+  });
+
+  it('honors session-local skips like the BFS seed does', () => {
+    const rep = lineFirstRep();
+    const idx = buildIndices(rep);
+    const node = findNextBuildNodeLineFirst(rep, idx, {
+      lastReachedFenKey: 'k4',
+      exclude: new Set(['p6']),
+    });
+    expect(node!.position.id).toBe('p5'); // p6 skipped → backtrack finds the sibling
+  });
+});
+
+describe('walker.computeScopedCoverage (Flow F2)', () => {
+  it('counts covered and to-build within scope and depth cap', () => {
+    const rep = lineFirstRep();
+    const idx = buildIndices(rep);
+    expect(computeScopedCoverage(rep, idx)).toEqual({ covered: 5, toBuild: 2 });
+    // Cap 4: p4/p5/p6 fall outside; p0..p3 are all covered.
+    expect(computeScopedCoverage(rep, idx, { maxDepthPlies: 4 })).toEqual({
+      covered: 4,
+      toBuild: 0,
+    });
+    // adv scope: p4 (covered) and p6 (gap) are on tagged in-edges.
+    expect(
+      computeScopedCoverage(rep, idx, { scope: { kind: 'tag', value: 'adv' } }),
+    ).toEqual({ covered: 1, toBuild: 1 });
   });
 });

@@ -7,6 +7,7 @@ import {
   isUserMove,
   MAX_REFUTATION_PLIES,
   parseLineScope,
+  parsePrepTarget,
   pgnToTree,
   treeToPgn,
   STARTING_FEN,
@@ -766,13 +767,15 @@ export async function patchDrillRules(
   if (!rules || typeof rules !== 'object') {
     throw new HttpError(400, 'drillRules must be an object');
   }
-  // Rules are stored as opaque partial jsonb, but a malformed `scope` would
-  // only surface later as a session that silently drills the wrong set — so
-  // validate that one field on the way in.
+  // Rules are stored as opaque partial jsonb, but a malformed `scope` (or,
+  // Flow F2, `prepTarget`) would only surface later as a session that silently
+  // drills or grows the wrong set — so validate those fields on the way in.
   let normalized = rules as DrillRules;
   try {
     const scope = parseLineScope((rules as DrillRules).scope);
     if (scope) normalized = { ...normalized, scope };
+    const prepTarget = parsePrepTarget((rules as DrillRules).prepTarget);
+    if (prepTarget) normalized = { ...normalized, prepTarget };
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }

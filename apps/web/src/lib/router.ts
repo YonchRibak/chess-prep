@@ -13,6 +13,10 @@
  *   #/walker/:id/:seed      → walker session (build | drill)
  *   #/health/:id            → repertoire health check
  *   #/lines/:id/:intent     → line navigator (train | grow)
+ *   #/prepare               → "Prepare against…" wizard (Flow F2)
+ *
+ * Flow F2: walker hashes also accept `guided=1`, marking a guided-prepare
+ * session (line-first traversal + lock-in; see WalkerSession).
  *
  * Flow F1: drill/walker hashes accept an optional `?scope=kind:value` suffix
  * (e.g. `#/walker/:id/drill?scope=openingName:Caro-Kann%20Defense`) carrying a
@@ -27,10 +31,18 @@ import { useAppStore, type View } from '../store/app.ts';
 
 const DRILL_MODES: DrillMode[] = ['due', 'walkthrough', 'weak', 'random', 'mistakes'];
 
-/** `?scope=kind:value` suffix, or '' — 'all' and valueless scopes encode as nothing. */
-function scopeToParam(scope: LineScope | undefined): string {
-  if (!scope || scope.kind === 'all' || !scope.value?.trim()) return '';
-  return `?scope=${encodeURIComponent(`${scope.kind}:${scope.value}`)}`;
+/**
+ * `?scope=kind:value&guided=1` suffix, or '' — 'all' and valueless scopes
+ * encode as nothing, `guided` only when set (Flow F2).
+ */
+function sessionParams(scope: LineScope | undefined, guided?: boolean): string {
+  const params = new URLSearchParams();
+  if (scope && scope.kind !== 'all' && scope.value?.trim()) {
+    params.set('scope', `${scope.kind}:${scope.value}`);
+  }
+  if (guided) params.set('guided', '1');
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
 }
 
 function parseScopeParam(query: string): LineScope | undefined {
@@ -68,13 +80,15 @@ export function viewToHash(v: View): string {
     case 'drill-setup':
       return `#/drill-setup/${v.repertoireId}`;
     case 'drill-session':
-      return `#/drill/${v.repertoireId}/${v.mode}${scopeToParam(v.scope)}`;
+      return `#/drill/${v.repertoireId}/${v.mode}${sessionParams(v.scope)}`;
     case 'walker-session':
-      return `#/walker/${v.repertoireId}/${v.seed}${scopeToParam(v.scope)}`;
+      return `#/walker/${v.repertoireId}/${v.seed}${sessionParams(v.scope, v.guided)}`;
     case 'health-check':
       return `#/health/${v.repertoireId}`;
     case 'lines':
       return `#/lines/${v.repertoireId}/${v.intent}`;
+    case 'prepare':
+      return '#/prepare';
   }
 }
 
@@ -105,7 +119,13 @@ export function hashToView(hash: string): View | null {
         : null;
     case 'walker':
       return id && (arg === 'build' || arg === 'drill')
-        ? { kind: 'walker-session', repertoireId: id, seed: arg, ...scopeProp(query) }
+        ? {
+            kind: 'walker-session',
+            repertoireId: id,
+            seed: arg,
+            ...scopeProp(query),
+            ...(new URLSearchParams(query).get('guided') === '1' ? { guided: true } : {}),
+          }
         : null;
     case 'health':
       return id ? { kind: 'health-check', repertoireId: id } : null;
@@ -113,6 +133,8 @@ export function hashToView(hash: string): View | null {
       return id && (arg === 'train' || arg === 'grow')
         ? { kind: 'lines', repertoireId: id, intent: arg }
         : null;
+    case 'prepare':
+      return { kind: 'prepare' };
     default:
       return null;
   }

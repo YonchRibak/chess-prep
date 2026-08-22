@@ -9,6 +9,7 @@ import { BrowseOpenings } from './pages/BrowseOpenings.tsx';
 import { WalkerSession } from './pages/WalkerSession.tsx';
 import { DailyDiet } from './pages/DailyDiet.tsx';
 import { LineNavigator } from './pages/LineNavigator.tsx';
+import { PrepareWizard } from './pages/PrepareWizard.tsx';
 import { Btn, ErrorBanner } from './components/ui.tsx';
 import { attachOnlineFlush, flushQueue } from './lib/srs/sync.ts';
 import { useHashRouting } from './lib/router.ts';
@@ -23,6 +24,7 @@ const VIEW_LABEL: Record<string, string> = {
   daily: 'Daily diet',
   'health-check': 'Health check',
   lines: 'Lines',
+  prepare: 'Prepare',
 };
 
 export function App() {
@@ -62,6 +64,12 @@ export function App() {
               Daily
             </Btn>
             <Btn
+              variant={view.kind === 'prepare' ? 'primary' : 'ghost'}
+              onClick={() => go({ kind: 'prepare' })}
+            >
+              Prepare
+            </Btn>
+            <Btn
               variant={view.kind === 'browse' ? 'primary' : 'ghost'}
               onClick={() => go({ kind: 'browse' })}
             >
@@ -79,11 +87,12 @@ export function App() {
         {view.kind === 'drill-setup' && <DrillSetup />}
         {view.kind === 'drill-session' && <DrillSession />}
         {view.kind === 'walker-session' && (
-          <WalkerSession seed={view.seed} scope={view.scope} />
+          <WalkerSession seed={view.seed} scope={view.scope} guided={view.guided} />
         )}
         {view.kind === 'daily' && <DailyDiet />}
         {view.kind === 'health-check' && <HealthCheckPage />}
         {view.kind === 'lines' && <LineNavigator intent={view.intent} />}
+        {view.kind === 'prepare' && <PrepareWizard />}
       </main>
 
       {error && <ErrorBanner message={error} onClose={clearError} />}

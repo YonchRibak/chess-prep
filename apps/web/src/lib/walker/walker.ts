@@ -182,6 +182,162 @@ export function findNextBuildNode(
   return null;
 }
 
+/* ---------------- Flow F2: line-first traversal (guided prepare) ---------------- */
+
+export interface LineFirstOptions
+  extends Pick<FindNextBuildNodeOptions, 'exclude' | 'scope' | 'openingLookup'> {
+  /**
+   * The position the session just extended. The traversal continues down that
+   * branch first, backtracks to the nearest ancestor with another gap when the
+   * branch is done, and only then jumps elsewhere.
+   */
+  lastReachedFenKey?: string;
+  /**
+   * Stop offering prompts at positions this many plies (or more) from the
+   * root — the prep target's depth cap. Subtrees past the cap are not entered.
+   */
+  maxDepthPlies?: number;
+}
+
+/**
+ * Guided-prepare sibling of `findNextBuildNode`: **line-at-a-time** instead of
+ * tree-wide BFS. BFS round-robin is the right default for balanced growth, but
+ * in a "prepare against X" session it jumps the board between unrelated
+ * branches on every question — focused prep wants to finish the Advance line
+ * to the target depth, rehearse it, then take the Classical.
+ *
+ * Order: (1) deepest-first inside the branch below `lastReachedFenKey`
+ * (main line before alternatives), (2) backtrack ancestor by ancestor to the
+ * nearest unexplored sibling branch, (3) with nothing in progress, the
+ * shallowest gap in scope (plain BFS). Scope and skip semantics are identical
+ * to `findNextBuildNode`; returns `null` when the scoped, capped subtree is
+ * fully covered — the guided session's "done" signal.
+ */
+export function findNextBuildNodeLineFirst(
+  rep: RepertoireFull,
+  indices: WalkerIndices,
+  options: LineFirstOptions = {},
+): WalkerNode | null {
+  const root = indices.positionByKey.get(rep.rootFenKey);
+  if (!root) return null;
+  const { exclude, scope, maxDepthPlies } = options;
+  const scoped = scope !== undefined && scope.kind !== 'all' && Boolean(scope.value?.trim());
+  const deepestByPositionId =
+    scoped && scope!.kind === 'openingName'
+      ? buildDeepestOpeningIndex(rep, options.openingLookup ?? (() => null))
+      : null;
+
+  // One BFS for depth-from-root, the in-edge, and the parent of every
+  // live-reachable position. Insertion order of `depthById` IS BFS order,
+  // which the fallback below relies on.
+  const depthById = new Map<string, number>();
+  const inEdgeById = new Map<string, RepertoireMove>();
+  const parentById = new Map<string, string>();
+  {
+    const queue: string[] = [root.id];
+    depthById.set(root.id, 0);
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      const d = depthById.get(id)!;
+      for (const m of liveOut(indices, id)) {
+        if (depthById.has(m.childPositionId)) continue;
+        depthById.set(m.childPositionId, d + 1);
+        inEdgeById.set(m.childPositionId, m);
+        parentById.set(m.childPositionId, id);
+        queue.push(m.childPositionId);
+      }
+    }
+  }
+
+  const color = rep.color as Color;
+  const attentionAt = (posId: string): WalkerNode | null => {
+    const pos = indices.positionById.get(posId);
+    if (!pos) return null;
+    if (liveOut(indices, posId).length > 0) return null;
+    if (exclude?.has(posId)) return null;
+    const depth = depthById.get(posId) ?? 0;
+    if (maxDepthPlies !== undefined && depth >= maxDepthPlies) return null;
+    if (scoped) {
+      const edge = inEdgeById.get(posId);
+      const inScope =
+        edge !== undefined &&
+        matchesLineScope(scope, {
+          deepestOpening: deepestByPositionId?.get(posId) ?? null,
+          lineTags: edge.lineTags ?? [],
+        });
+      if (!inScope) return null;
+    }
+    return {
+      position: pos,
+      kind: isUserMove(fenTurn(pos.fullFen), color) ? 'user-prep' : 'opponent-picks',
+      depth,
+      existingMoves: [],
+      path: findPathToPosition(rep, indices, posId),
+    };
+  };
+
+  /** DFS, main line first, self included. Stops at the depth cap. */
+  const dfs = (startId: string): WalkerNode | null => {
+    const visited = new Set<string>();
+    const visit = (id: string): WalkerNode | null => {
+      if (visited.has(id)) return null;
+      visited.add(id);
+      const here = attentionAt(id);
+      if (here) return here;
+      const depth = depthById.get(id);
+      if (depth === undefined) return null;
+      if (maxDepthPlies !== undefined && depth >= maxDepthPlies) return null;
+      const out = [...liveOut(indices, id)].sort(byMainLineFirst);
+      for (const m of out) {
+        const found = visit(m.childPositionId);
+        if (found) return found;
+      }
+      return null;
+    };
+    return visit(startId);
+  };
+
+  const last = options.lastReachedFenKey
+    ? indices.positionByKey.get(options.lastReachedFenKey)
+    : undefined;
+
+  if (last && depthById.has(last.id)) {
+    // (1) Finish the branch in progress.
+    const below = dfs(last.id);
+    if (below) return below;
+    // (2) Backtrack to the nearest ancestor with an unexplored sibling gap.
+    let from = last.id;
+    let cur = parentById.get(last.id);
+    while (cur !== undefined) {
+      for (const m of [...liveOut(indices, cur)].sort(byMainLineFirst)) {
+        if (m.childPositionId === from) continue;
+        const found = dfs(m.childPositionId);
+        if (found) return found;
+      }
+      from = cur;
+      cur = parentById.get(cur);
+    }
+    return null;
+  }
+
+  // (3) Nothing in progress: shallowest gap in scope (BFS order).
+  for (const id of depthById.keys()) {
+    const node = attentionAt(id);
+    if (node) return node;
+  }
+  return null;
+}
+
+function liveOut(indices: WalkerIndices, posId: string): RepertoireMove[] {
+  return (indices.movesByParent.get(posId) ?? []).filter((m) => !m.isDropped);
+}
+
+function byMainLineFirst(a: RepertoireMove, b: RepertoireMove): number {
+  if (a.isMainLine !== b.isMainLine) return a.isMainLine ? -1 : 1;
+  if (a.priority !== b.priority) return a.priority - b.priority;
+  return a.san.localeCompare(b.san);
+}
+
 /**
  * Variant: starting BFS from a given position (not the root). Used by the
  * "Keep building this branch" prompt after drill-pauses-for-build, so the
@@ -283,6 +439,63 @@ export function computeCoverage(rep: RepertoireFull, indices: WalkerIndices): Co
     liveMoves,
     droppedMoves,
   };
+}
+
+/**
+ * Flow F2: coverage within a scope + depth cap — the guided session's
+ * "covered / to target" meter. Structural v1 (attention-node counts); the
+ * game-weighted upgrade is F3. `toBuild` counts the nodes
+ * `findNextBuildNodeLineFirst` would still offer (modulo session-local skips,
+ * which stay counted — a deferred prompt is still work to do).
+ */
+export interface ScopedCoverageStats {
+  /** In-scope positions (within the cap) that already have a live continuation. */
+  covered: number;
+  /** In-scope attention nodes (within the cap) still to prompt about. */
+  toBuild: number;
+}
+
+export function computeScopedCoverage(
+  rep: RepertoireFull,
+  indices: WalkerIndices,
+  options: Pick<LineFirstOptions, 'scope' | 'openingLookup' | 'maxDepthPlies'> = {},
+): ScopedCoverageStats {
+  const root = indices.positionByKey.get(rep.rootFenKey);
+  if (!root) return { covered: 0, toBuild: 0 };
+  const { scope, maxDepthPlies } = options;
+  const scoped = scope !== undefined && scope.kind !== 'all' && Boolean(scope.value?.trim());
+  const deepestByPositionId =
+    scoped && scope!.kind === 'openingName'
+      ? buildDeepestOpeningIndex(rep, options.openingLookup ?? (() => null))
+      : null;
+
+  let covered = 0;
+  let toBuild = 0;
+  type Step = { id: string; depth: number; inEdge: RepertoireMove | null };
+  const queue: Step[] = [{ id: root.id, depth: 0, inEdge: null }];
+  const visited = new Set<string>([root.id]);
+  while (queue.length > 0) {
+    const { id, depth, inEdge } = queue.shift()!;
+    if (maxDepthPlies !== undefined && depth >= maxDepthPlies) continue;
+    const out = liveOut(indices, id);
+    const inScope = !scoped
+      ? true
+      : inEdge !== null &&
+        matchesLineScope(scope, {
+          deepestOpening: deepestByPositionId?.get(id) ?? null,
+          lineTags: inEdge.lineTags ?? [],
+        });
+    if (inScope) {
+      if (out.length > 0) covered++;
+      else toBuild++;
+    }
+    for (const m of out) {
+      if (visited.has(m.childPositionId)) continue;
+      visited.add(m.childPositionId);
+      queue.push({ id: m.childPositionId, depth: depth + 1, inEdge: m });
+    }
+  }
+  return { covered, toBuild };
 }
 
 /** Set of position IDs reachable from the root via live (non-dropped) moves. */

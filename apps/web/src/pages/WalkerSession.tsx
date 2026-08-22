@@ -33,6 +33,7 @@ import {
   type Color,
   type ExplorerEntry,
   type LineScope,
+  type PrepTarget,
   type RankedReply,
   type SrsCardDto,
   type UserCandidate,
@@ -55,7 +56,8 @@ import {
 } from '../lib/openings/candidates.ts';
 import { selectAutoExpandSans } from '../lib/walker/autoExpand.ts';
 import { warmFrontier } from '../lib/openings/prefetch.ts';
-import { gradeAndQueue, logAttempt } from '../lib/srs/sync.ts';
+import { gradeAndQueue, logAttempt, pullSince } from '../lib/srs/sync.ts';
+import { emptyCardFor } from '../lib/srs/scheduler.ts';
 import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
 import { RefutationPrompt } from '../components/RefutationPrompt.tsx';
 import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
@@ -66,7 +68,9 @@ import { EnginePanel } from '../components/EnginePanel.tsx';
 import {
   buildIndices,
   computeCoverage,
+  computeScopedCoverage,
   findNextBuildNode,
+  findNextBuildNodeLineFirst,
   findPathToPosition,
   pickOpponentReplyForDrill,
   type FindNextBuildNodeOptions,
@@ -104,7 +108,34 @@ type Phase =
       lastCardFenKey: string; // where to resume FSRS queue after answer
     }
   | { kind: 'keep-building-prompt'; freshFenKey: string }
+  /**
+   * Flow F2: lock-in micro-rehearsal — replay the moves just built, graded
+   * normally (real FSRS state). A drill phase, so the engine is gated for its
+   * whole duration: if a lock-in card can see an eval before grading, the
+   * feature is wrong.
+   */
+  | { kind: 'lockin-prompt'; index: number }
+  | { kind: 'lockin-wrong'; index: number; userSan: string; stage: 'reveal' | 'retry' }
   | { kind: 'complete'; reason: 'no-more-attention' | 'no-more-due' };
+
+/** One completed lock-in pass, for the guided session summary. */
+interface LockInResult {
+  sans: string[];
+  correct: number;
+  total: number;
+}
+
+/** In-flight lock-in state. A ref, because answers arrive via event handlers. */
+interface LockInState {
+  items: DrillItem[];
+  /** Where the build walk resumes once the pass ends (null = session done). */
+  resumeNode: WalkerNode | null;
+  correct: number;
+  wrong: number;
+}
+
+/** Lock in after this many new moves even if the line isn't done yet. */
+const LOCK_IN_MAX_PENDING = 5;
 
 /** A prep-swap awaiting inline confirmation (replaces window.confirm). */
 interface PendingSwap {
@@ -142,9 +173,16 @@ interface WalkerSessionProps {
    * editor-level default — the session never writes it back.
    */
   scope?: LineScope;
+  /**
+   * Flow F2: guided-prepare build session. Line-first traversal, auto-expand
+   * forced ON for the session (an override at walk time — never a write to
+   * `repertoires.auto_expand`), reply selection parameterized by the stored
+   * `drillRules.prepTarget`, and lock-in rehearsal after each finished line.
+   */
+  guided?: boolean;
 }
 
-export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps) {
+export function WalkerSession({ seed, scope: sessionScope, guided = false }: WalkerSessionProps) {
   const active = useAppStore((s) => s.active);
   const go = useAppStore((s) => s.go);
   const reloadActive = useAppStore((s) => s.reloadActive);
@@ -156,6 +194,24 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
   const [drillCursor, setDrillCursor] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pendingSwap, setPendingSwap] = useState<PendingSwap | null>(null);
+
+  /* ---------------- Flow F2: guided-session state ---------------- */
+
+  // The prep target is per-repertoire (stored in drill_rules by the wizard);
+  // only read in guided mode.
+  const prepTarget: PrepTarget = mergeDrillRules(active?.drillRules).prepTarget;
+  // Where the line-first walk continues from — the position last extended.
+  const lastReachedRef = useRef<string | undefined>(undefined);
+  // User-side moves saved since the last lock-in pass (move ids, in order).
+  const pendingLockInRef = useRef<string[]>([]);
+  const lockInRef = useRef<LockInState | null>(null);
+  const [lockInResults, setLockInResults] = useState<LockInResult[]>([]);
+  const [lockInBanner, setLockInBanner] = useState<string | null>(null);
+  // Scope options mirrored into state (the ref serves event handlers; the
+  // state drives the coverage meter, which must re-render when names arrive).
+  const [meterScope, setMeterScope] = useState<
+    Pick<FindNextBuildNodeOptions, 'scope' | 'openingLookup'> | null
+  >(null);
 
   // Board state — one rules instance kept across the whole session so transitions feel continuous.
   const rules = useChessRules();
@@ -181,6 +237,18 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
   const coverage = useMemo(
     () => (active && indices ? computeCoverage(active, indices) : null),
     [active, indices],
+  );
+
+  // Flow F2: the guided session's coverage-to-target meter (structural v1).
+  const scopedCoverage = useMemo(
+    () =>
+      guided && active && indices && meterScope
+        ? computeScopedCoverage(active, indices, {
+            ...meterScope,
+            maxDepthPlies: prepTarget.maxDepthPlies,
+          })
+        : null,
+    [guided, active, indices, meterScope, prepTarget.maxDepthPlies],
   );
 
   /* ---------------- board loading: always replay from the root ---------------- */
@@ -326,6 +394,10 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
     setStats({ correct: 0, wrong: 0, savedMoves: 0, autoAdded: 0 });
     sessionSkippedRef.current = new Set();
     setPendingSwap(null);
+    lastReachedRef.current = undefined;
+    pendingLockInRef.current = [];
+    lockInRef.current = null;
+    setLockInResults([]);
 
     (async () => {
       // Phase 9a: a line scope steers BOTH seeds — building inside one line,
@@ -338,9 +410,15 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
         openingLookup: openingNameLookup(names),
       };
       scopeOptionsRef.current = scopeOptions;
+      setMeterScope(scopeOptions);
 
       if (seed === 'build') {
-        const node = findNextBuildNode(active, indices, scopeOptions);
+        const node = guided
+          ? findNextBuildNodeLineFirst(active, indices, {
+              ...scopeOptions,
+              maxDepthPlies: prepTarget.maxDepthPlies,
+            })
+          : findNextBuildNode(active, indices, scopeOptions);
         if (cancelled) return;
         if (!node) {
           setPhase({ kind: 'complete', reason: 'no-more-attention' });
@@ -378,7 +456,7 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
       transitionAbortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, seed, sessionScope?.kind, sessionScope?.value]);
+  }, [active?.id, seed, guided, sessionScope?.kind, sessionScope?.value]);
 
   /* ---------------- keyboard shortcuts ---------------- */
 
@@ -444,18 +522,47 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
       const idx = buildIndices(next);
       const exclude = sessionSkippedRef.current;
       const scopeOptions = scopeOptionsRef.current;
-      let node = findNextBuildNode(next, idx, { fromFenKey, exclude, ...scopeOptions });
-      if (!node && fromFenKey) {
-        node = findNextBuildNode(next, idx, { exclude, ...scopeOptions });
+      let node: WalkerNode | null;
+      if (guided) {
+        // Flow F2: line-at-a-time — finish the branch just extended before
+        // touching a sibling, stop at the prep target's depth.
+        node = findNextBuildNodeLineFirst(next, idx, {
+          exclude,
+          ...scopeOptions,
+          lastReachedFenKey: fromFenKey ?? lastReachedRef.current,
+          maxDepthPlies: prepTarget.maxDepthPlies,
+        });
+      } else {
+        node = findNextBuildNode(next, idx, { fromFenKey, exclude, ...scopeOptions });
+        if (!node && fromFenKey) {
+          node = findNextBuildNode(next, idx, { exclude, ...scopeOptions });
+        }
       }
+
+      // Flow F2: lock in the just-built moves BEFORE presenting a node from a
+      // different line (or before ending). The pass replays exactly those
+      // moves, graded normally, then resumes at `node`.
+      if (guided && pendingLockInRef.current.length > 0) {
+        const lineEnded = node === null || !nodeContinuesPending(node);
+        if (lineEnded || pendingLockInRef.current.length >= LOCK_IN_MAX_PENDING) {
+          await startLockIn(next, idx, node);
+          return;
+        }
+      }
+
       if (!node) {
         setPhase({ kind: 'complete', reason: 'no-more-attention' });
         return;
       }
 
-      if (next.autoExpand && node.kind === 'opponent-picks') {
+      // Flow F2: guided sessions force auto-expansion ON for the session — an
+      // override at walk time, never a write to `repertoires.auto_expand`.
+      // All 9c guarantees (dropped never re-added, explorer-only writes, the
+      // cap) sit below this flag and hold unchanged.
+      if ((next.autoExpand || guided) && node.kind === 'opponent-picks') {
         const added = await autoExpandAt(next, idx, node);
         if (added > 0) {
+          lastReachedRef.current = node.position.fenKey;
           await reloadActive();
           const refreshed = useAppStore.getState().active;
           if (!refreshed) return;
@@ -471,6 +578,14 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
       warmFrontier(frontierKeys(next, idx));
       return;
     }
+  }
+
+  /** Is `node` still on the line being built (below the last pending move)? */
+  function nodeContinuesPending(node: WalkerNode): boolean {
+    const pending = pendingLockInRef.current;
+    if (pending.length === 0) return true;
+    const lastMoveId = pending[pending.length - 1]!;
+    return node.path.some((m) => m.id === lastMoveId);
   }
 
   /**
@@ -490,10 +605,13 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
     const fenKey = node.position.fenKey;
     // No book fetch here: the book fallback can never authorize a silent write
     // (see selectAutoExpandSans), so asking for it would be a wasted request.
+    // Flow F2: in guided mode the prep target's minShare parameterizes reply
+    // selection — "broader" preps rarer replies, "main lines" fewer.
     const { replies, source } = await getOpponentCandidates(
       fenKey,
       fenTurn(node.position.fullFen),
       [],
+      guided ? { policy: { minShare: prepTarget.minShare } } : {},
     );
     // Pass ALL moves at this parent — dropped and Phase 9d shadow lines
     // included, which is why this reads `allMovesByParent`. A SAN that already
@@ -554,8 +672,9 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
   ) {
     setError(null);
     try {
-      await api.addMove(active!.id, { parentFenKey, san });
+      const added = await api.addMove(active!.id, { parentFenKey, san });
       setStats((s) => ({ ...s, savedMoves: s.savedMoves + 1 }));
+      noteGuidedSave(parentFenKey, added.id);
       await afterPrepSaved(opts.resume, parentFenKey);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
@@ -583,12 +702,23 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
     setPendingSwap(null);
     setError(null);
     try {
-      await api.addMove(active!.id, { parentFenKey, san, onConflict: 'swap' });
+      const added = await api.addMove(active!.id, { parentFenKey, san, onConflict: 'swap' });
       setStats((s) => ({ ...s, savedMoves: s.savedMoves + 1 }));
+      noteGuidedSave(parentFenKey, added.id);
       await afterPrepSaved(resume, parentFenKey);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  /**
+   * Flow F2: remember what the guided session just built — the user-side move
+   * joins the pending lock-in set, and the walk continues from this position.
+   */
+  function noteGuidedSave(parentFenKey: string, movedId?: string) {
+    if (!guided) return;
+    lastReachedRef.current = parentFenKey;
+    if (movedId) pendingLockInRef.current.push(movedId);
   }
 
   /** User picked one or more opponent responses to prepare against. */
@@ -600,6 +730,8 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
         await api.addMove(active!.id, { parentFenKey, san });
       }
       setStats((s) => ({ ...s, savedMoves: s.savedMoves + sans.length }));
+      // Opponent picks carry no card — they steer the walk but aren't locked in.
+      noteGuidedSave(parentFenKey);
       await resumeBuild();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -798,6 +930,173 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
     }
   }
 
+  /* ---------------- Flow F2: lock-in micro-rehearsal ---------------- */
+
+  /**
+   * Replay the user-side moves just built, in line order, on the persistent
+   * board — opponent replies auto-play between cards. Grading uses the normal
+   * path (real FSRS grades, attempts logged), so the pass seeds honest SRS
+   * state rather than a cosmetic replay.
+   */
+  async function startLockIn(
+    rep: RepertoireFull,
+    idx: WalkerIndices,
+    resumeNode: WalkerNode | null,
+  ) {
+    const pendingIds = pendingLockInRef.current;
+    pendingLockInRef.current = [];
+    setLockInBanner(null);
+    // The server created cards for these moves on insert; pull them so grading
+    // updates the real card. Offline falls back to a synthesized empty card —
+    // the same state the server card starts in, merged LWW on next sync.
+    try {
+      await pullSince(rep.id);
+    } catch {
+      /* offline — synthesize below */
+    }
+    const cards = await getAllCardsLocal();
+    const cardByMoveId = new Map(cards.map((c) => [c.moveId, c]));
+
+    const items: DrillItem[] = [];
+    for (const id of pendingIds) {
+      const mv = rep.moves.find((m) => m.id === id);
+      if (!mv || mv.isDropped || mv.isRefutation) continue;
+      const parent = idx.positionById.get(mv.parentPositionId);
+      if (!parent) continue;
+      if (!isUserMove(fenTurn(parent.fullFen), rep.color as Color)) continue;
+      items.push({
+        card: cardByMoveId.get(mv.id) ?? emptyCardFor(mv.id),
+        move: mv,
+        parentPosition: parent,
+        depth: findPathToPosition(rep, idx, parent.id).length,
+      });
+    }
+    items.sort((a, b) => a.depth - b.depth);
+    // Wire the opponent reply between consecutive cards so the board flows
+    // through the line instead of snap-loading each position.
+    for (let i = 0; i + 1 < items.length; i++) {
+      const cur = items[i]!;
+      const nxt = items[i + 1]!;
+      const out = (idx.movesByParent.get(cur.move.childPositionId) ?? []).filter(
+        (m) => !m.isDropped,
+      );
+      const connecting = out.find((m) => m.childPositionId === nxt.parentPosition.id);
+      if (connecting) cur.opponentResponseSan = connecting.san;
+    }
+
+    if (items.length === 0) {
+      resumeAfterLockIn(resumeNode);
+      return;
+    }
+    lockInRef.current = { items, resumeNode, correct: 0, wrong: 0 };
+    loadToPosition(rep, idx, items[0]!.parentPosition);
+    setPhase({ kind: 'lockin-prompt', index: 0 });
+  }
+
+  function resumeAfterLockIn(resumeNode: WalkerNode | null) {
+    lockInRef.current = null;
+    if (!resumeNode) {
+      setPhase({ kind: 'complete', reason: 'no-more-attention' });
+      return;
+    }
+    const rep = useAppStore.getState().active ?? active!;
+    const idx = buildIndices(rep);
+    loadToPosition(rep, idx, resumeNode.position);
+    setPhase({ kind: 'attention', node: resumeNode });
+  }
+
+  async function advanceLockIn(index: number, signal: AbortSignal) {
+    const st = lockInRef.current;
+    if (!st) return;
+    const it = st.items[index]!;
+    if (it.opponentResponseSan && !rules.isGameOver) {
+      await sleep(OPPONENT_PAUSE_MS, signal);
+      rules.playSan(it.opponentResponseSan);
+      await sleep(OPPONENT_PAUSE_MS, signal);
+    }
+    const nextIndex = index + 1;
+    const next = st.items[nextIndex];
+    if (next) {
+      if (!it.opponentResponseSan) {
+        // Line discontinuity — reload the board at the next card's parent.
+        const rep = useAppStore.getState().active ?? active!;
+        loadToPosition(rep, buildIndices(rep), next.parentPosition);
+      }
+      setPhase({ kind: 'lockin-prompt', index: nextIndex });
+      return;
+    }
+    // Pass complete: one-line summary, then back to building.
+    setLockInResults((rs) => [
+      ...rs,
+      { sans: st.items.map((i2) => i2.move.san), correct: st.correct, total: st.items.length },
+    ]);
+    setLockInBanner(`Line locked in — ${st.correct}/${st.items.length} first try`);
+    resumeAfterLockIn(st.resumeNode);
+  }
+
+  async function handleLockInMovePlayed(san: string) {
+    const st = lockInRef.current;
+    if (!st || phase.kind !== 'lockin-prompt') return;
+    const index = phase.index;
+    const it = st.items[index];
+    if (!it) return;
+    const ctl = startTransition();
+    try {
+      if (san === it.move.san) {
+        st.correct++;
+        setStats((s) => ({ ...s, correct: s.correct + 1 }));
+        void gradeAndQueue(it.card, Grade.Good);
+        void logAttempt({
+          moveId: it.move.id,
+          repertoireId: active!.id,
+          playedSan: san,
+          wasCorrect: true,
+        });
+        await sleep(CORRECT_PAUSE_MS, ctl.signal);
+        await advanceLockIn(index, ctl.signal);
+      } else {
+        rules.undo();
+        st.wrong++;
+        setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
+        void gradeAndQueue(it.card, Grade.Again);
+        void logAttempt({
+          moveId: it.move.id,
+          repertoireId: active!.id,
+          playedSan: san,
+          wasCorrect: false,
+        });
+        setPhase({ kind: 'lockin-wrong', index, userSan: san, stage: 'reveal' });
+        rules.playSan(it.move.san);
+        await sleep(WRONG_REVEAL_MS, ctl.signal);
+        rules.undo();
+        setPhase({ kind: 'lockin-wrong', index, userSan: san, stage: 'retry' });
+      }
+    } catch {
+      /* aborted */
+    }
+  }
+
+  /** Retry after a lock-in miss: only the correct move advances. */
+  async function handleLockInRetryPlayed(san: string) {
+    const st = lockInRef.current;
+    if (!st || phase.kind !== 'lockin-wrong' || phase.stage !== 'retry') return;
+    const index = phase.index;
+    const it = st.items[index];
+    if (!it) return;
+    if (san !== it.move.san) {
+      rules.undo();
+      return;
+    }
+    const ctl = startTransition();
+    try {
+      // Already graded Again on the miss — no re-grade.
+      await sleep(CORRECT_PAUSE_MS, ctl.signal);
+      await advanceLockIn(index, ctl.signal);
+    } catch {
+      /* aborted */
+    }
+  }
+
   /* ---------------- board move dispatch ---------------- */
 
   /**
@@ -810,6 +1109,14 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
     }
     if (phase.kind === 'drill-wrong') {
       await handleRetryMovePlayed(san);
+      return;
+    }
+    if (phase.kind === 'lockin-prompt') {
+      await handleLockInMovePlayed(san);
+      return;
+    }
+    if (phase.kind === 'lockin-wrong') {
+      await handleLockInRetryPlayed(san);
       return;
     }
     if (phase.kind === 'attention') {
@@ -867,6 +1174,8 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
   const movableColor: BoardColor | null =
     phase.kind === 'drill-prompt' ||
     (phase.kind === 'drill-wrong' && phase.stage === 'retry') ||
+    phase.kind === 'lockin-prompt' ||
+    (phase.kind === 'lockin-wrong' && phase.stage === 'retry') ||
     showBuildPanel
       ? ((rules.turn === 'w' ? 'white' : 'black') as BoardColor)
       : null;
@@ -882,20 +1191,38 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
             ← All repertoires
           </button>
           <h2 className="text-lg font-semibold">
-            {seed === 'build' ? 'Build' : 'Drill'}: {active.name}
+            {guided ? 'Prepare' : seed === 'build' ? 'Build' : 'Drill'}: {active.name}
           </h2>
           <span className="text-xs text-slate-500">
             {active.color === 'white' ? '♔ White' : '♚ Black'}
           </span>
         </div>
         <div className="flex gap-2 items-center">
-          {coverage && (
-            <span className="text-[10px] text-slate-500 font-mono">
-              {coverage.inFlight} live / {coverage.uncovered} todo
-              {coverage.droppedMoves > 0 ? ` · ${coverage.droppedMoves} dropped` : ''}
+          {scopedCoverage ? (
+            <span
+              className="text-[10px] text-emerald-300 font-mono"
+              title="Prepared positions vs. remaining prompts, within this session's line and depth target"
+            >
+              {scopedCoverage.covered}/{scopedCoverage.covered + scopedCoverage.toBuild} covered
+              · {scopedCoverage.toBuild} to target
+            </span>
+          ) : (
+            coverage && (
+              <span className="text-[10px] text-slate-500 font-mono">
+                {coverage.inFlight} live / {coverage.uncovered} todo
+                {coverage.droppedMoves > 0 ? ` · ${coverage.droppedMoves} dropped` : ''}
+              </span>
+            )
+          )}
+          {seed === 'build' && guided && (
+            <span
+              className="text-[10px] text-slate-400"
+              title="Guided prepare: common opponent replies are added automatically for this session. Never re-adds a branch you dropped."
+            >
+              auto-expand on (guided)
             </span>
           )}
-          {seed === 'build' && (
+          {seed === 'build' && !guided && (
             <label
               className="flex items-center gap-1.5 text-[10px] text-slate-400"
               title="Silently add the most-played opponent replies while building. Never re-adds a branch you dropped."
@@ -919,7 +1246,14 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
         <p className="text-slate-400 text-sm">Setting up walker…</p>
       )}
       {phase.kind === 'complete' && (
-        <CompletePane reason={phase.reason} stats={stats} seed={seed} />
+        <CompletePane
+          reason={phase.reason}
+          stats={stats}
+          seed={seed}
+          guided={guided}
+          lockInResults={lockInResults}
+          sessionScope={sessionScope}
+        />
       )}
 
       {phase.kind !== 'loading' && phase.kind !== 'complete' && (
@@ -947,6 +1281,44 @@ export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps)
               <div className="rounded border border-rose-800 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
                 {error}
               </div>
+            )}
+
+            {lockInBanner && phase.kind === 'attention' && (
+              <div className="rounded border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-200">
+                {lockInBanner}
+              </div>
+            )}
+
+            {phase.kind === 'lockin-prompt' && (
+              <Card title="Lock it in">
+                <p className="text-xs text-slate-400">
+                  Card <span className="font-mono">{phase.index + 1}</span> of{' '}
+                  <span className="font-mono">{lockInRef.current?.items.length ?? 0}</span> —
+                  replay the line you just built.
+                </p>
+                <p className="text-xs text-slate-500 mt-2">
+                  Play your prepared move on the board.
+                </p>
+              </Card>
+            )}
+
+            {phase.kind === 'lockin-wrong' && (
+              <Card title={phase.stage === 'reveal' ? '✗ Not yet' : 'Play the correct move'}>
+                <p className="text-sm">
+                  Correct:{' '}
+                  <span className="font-mono font-medium">
+                    {lockInRef.current?.items[phase.index]?.move.san}
+                  </span>
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  You played: <span className="font-mono">{phase.userSan}</span>
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {phase.stage === 'reveal'
+                    ? 'Graded Again — watch the correct move…'
+                    : 'Now play it yourself to continue.'}
+                </p>
+              </Card>
             )}
 
             {pendingSwap && (
@@ -1234,15 +1606,69 @@ function CompletePane({
   reason,
   stats,
   seed,
+  guided = false,
+  lockInResults = [],
+  sessionScope,
 }: {
   reason: 'no-more-attention' | 'no-more-due';
   stats: { correct: number; wrong: number; savedMoves: number; autoAdded: number };
   seed: WalkerSeed;
+  guided?: boolean;
+  lockInResults?: LockInResult[];
+  sessionScope?: LineScope;
 }) {
   const go = useAppStore((s) => s.go);
   const active = useAppStore((s) => s.active);
   const totalAnswered = stats.correct + stats.wrong;
   const pct = totalAnswered > 0 ? Math.round((stats.correct / totalAnswered) * 100) : 0;
+
+  if (guided && active) {
+    // Flow F2: the guided session's finish line — what was built, how the
+    // lock-in passes went, and a one-tap scoped drill over exactly this work.
+    const worst = [...lockInResults].sort(
+      (a, b) => a.correct / a.total - b.correct / b.total,
+    )[0];
+    return (
+      <Card title="Preparation complete">
+        <p className="text-sm text-slate-300">
+          {reason === 'no-more-attention'
+            ? 'Everything in scope is covered to your target depth.'
+            : 'Session ended.'}
+        </p>
+        <p className="text-xs text-slate-400 mt-2">
+          {lockInResults.length} line{lockInResults.length === 1 ? '' : 's'} locked in ·{' '}
+          {stats.savedMoves} move{stats.savedMoves === 1 ? '' : 's'} saved
+          {stats.autoAdded > 0 ? ` · ${stats.autoAdded} replies auto-added` : ''}
+        </p>
+        {worst && worst.correct < worst.total && (
+          <p className="text-xs text-amber-300 mt-1">
+            Weakest line: <span className="font-mono">{worst.sans.join(' ')}</span> (
+            {worst.correct}/{worst.total} first try)
+          </p>
+        )}
+        <div className="flex gap-2 mt-3">
+          <Btn
+            variant="primary"
+            onClick={() =>
+              go({
+                kind: 'walker-session',
+                repertoireId: active.id,
+                seed: 'drill',
+                ...(sessionScope ? { scope: sessionScope } : {}),
+              })
+            }
+          >
+            Drill these now
+          </Btn>
+          <Btn onClick={() => go({ kind: 'editor', repertoireId: active.id })}>
+            Edit repertoire
+          </Btn>
+          <Btn onClick={() => go({ kind: 'list' })}>All repertoires</Btn>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card title="Session complete">
       {reason === 'no-more-attention' ? (

@@ -18,6 +18,7 @@ import {
   selectOpponentReplies,
   type EngineCandidate,
   type ExplorerEntry,
+  type OpponentReplyPolicy,
   type RankedReply,
   type UserCandidate,
 } from '@chess-prep/shared';
@@ -71,10 +72,16 @@ export async function getOpponentCandidates(
   fenKey: string,
   sideToMove: 'w' | 'b',
   bookFallback: readonly BookContinuation[],
-  opts: { cachedOnly?: boolean; max?: number } = {},
+  opts: {
+    cachedOnly?: boolean;
+    max?: number;
+    /** Flow F2: the guided session's prep target parameterizes reply selection. */
+    policy?: Partial<OpponentReplyPolicy>;
+  } = {},
 ): Promise<OpponentCandidates> {
   const entry = await fetchExplorerEntry(fenKey, opts);
   const ranked = selectOpponentReplies(entry, sideToMove, {
+    ...(opts.policy ?? {}),
     ...(opts.max === undefined ? {} : { maxReplies: opts.max }),
   });
   if (ranked.length > 0) return { replies: ranked, source: 'explorer' };
