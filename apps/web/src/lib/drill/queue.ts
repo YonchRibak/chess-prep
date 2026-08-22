@@ -277,6 +277,101 @@ function sortMainLineFirst(a: RepertoireMove, b: RepertoireMove): number {
   return a.san.localeCompare(b.san);
 }
 
+/* ---------------- Flow F4: the smart default queue ---------------- */
+
+export interface BuildSmartQueueArgs {
+  repertoire: RepertoireFull;
+  cards: SrsCardDto[];
+  rules: DrillRules;
+  /** The local attempt log; without it the mistakes segment is empty. */
+  attempts?: readonly DrillAttemptDto[];
+  /** Max state=new cards that may enter, shared with the daily diet's cap. */
+  newCardsPerDay?: number;
+  now?: Date;
+  /**
+   * The daily diet's reset boundary. New cards with `lastReview` after it
+   * count as already-shown-today, so this queue COMPOSES with the diet's cap
+   * instead of double-spending it.
+   */
+  dailyResetAt?: Date;
+  openingLookup?: (fenKey: string) => OpeningId | null;
+}
+
+/**
+ * The one queue behind the default Train button: **due (FSRS order) →
+ * recent mistakes (Phase 9d ranking, deduped against due) → new cards**
+ * (capped by `newCardsPerDay`). Scope and the other rules filter first,
+ * exactly as in `buildDrillQueue`.
+ *
+ * Consumed by the walker's drill seed only — the five explicit modes stay
+ * selectable behind an "advanced" disclosure there, and classic
+ * `DrillSession`/`DrillSetup` are untouched pending the planned
+ * consolidation. This must not grow a fourth drill implementation: it is a
+ * queue-builder change, not a new session surface.
+ */
+export function buildSmartQueue(args: BuildSmartQueueArgs): DrillItem[] {
+  const {
+    repertoire,
+    cards,
+    rules: rulesIn,
+    attempts,
+    newCardsPerDay = 20,
+    now = new Date(),
+    dailyResetAt = new Date(now.getTime() - 24 * 60 * 60 * 1000),
+    openingLookup,
+  } = args;
+  const rules = mergeDrillRules(rulesIn);
+  const items = collectDrillCandidates({ repertoire, cards, rules, openingLookup }).filter(
+    (c) => matchesLineScope(rules.scope, c.scopeCtx),
+  );
+
+  // Segment 1: due non-new cards, oldest first (plain FSRS order).
+  const due = items
+    .filter((it) => it.card.state !== 0 && new Date(it.card.due) <= now)
+    .sort((a, b) => new Date(a.card.due).getTime() - new Date(b.card.due).getTime());
+  const queued = new Set(due.map((it) => it.move.id));
+
+  // Segment 2: recent mistakes by the 9d ranking, ignoring the due date
+  // (FSRS has by definition pushed a just-missed card out), deduped against
+  // the due segment so a card is never asked twice in one queue.
+  const ranked = rankMistakes(attempts ?? [], { now });
+  const rankIndex = new Map(ranked.map((m, i) => [m.moveId, i]));
+  const mistakes = items
+    .filter((it) => rankIndex.has(it.move.id) && !queued.has(it.move.id) && it.card.state !== 0)
+    .sort((a, b) => rankIndex.get(a.move.id)! - rankIndex.get(b.move.id)!);
+  for (const it of mistakes) queued.add(it.move.id);
+
+  // Segment 3: new cards, up to what's left of today's budget — counted by
+  // `lastReview > dailyResetAt` (same mechanism as the daily diet), so a
+  // diet session earlier today shrinks this segment rather than doubling it.
+  const consumedToday = cards.filter(
+    (c) =>
+      c.state === 0 &&
+      c.lastReview != null &&
+      new Date(c.lastReview).getTime() > dailyResetAt.getTime(),
+  ).length;
+  let budget = Math.max(0, newCardsPerDay - consumedToday);
+  const fresh: DrillItem[] = [];
+  for (const it of items) {
+    if (budget <= 0) break;
+    if (it.card.state !== 0 || queued.has(it.move.id)) continue;
+    // A state=new card with a review inside today's window already spent its
+    // budget slot (it is what `consumedToday` counted) — re-queueing it here
+    // would double-spend the cap.
+    if (
+      it.card.lastReview != null &&
+      new Date(it.card.lastReview).getTime() > dailyResetAt.getTime()
+    ) {
+      continue;
+    }
+    fresh.push(it);
+    queued.add(it.move.id);
+    budget--;
+  }
+
+  return [...due, ...mistakes, ...fresh];
+}
+
 /* ---------------- Phase 8a daily-diet queue ---------------- */
 
 export interface DailyDietItem extends DrillItem {

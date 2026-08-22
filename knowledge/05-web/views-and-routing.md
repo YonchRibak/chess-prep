@@ -31,10 +31,11 @@ Navigate with `useAppStore.getState().go(view)` — never by setting the hash di
 
 ## Shell
 
-[App.tsx](../../apps/web/src/App.tsx) renders a top nav (Repertoires / Daily / Browse
-openings), an `ErrorBanner` bound to `store.error`, and one page per `view.kind`.
-Adding a view means touching four places: the union, `viewToHash`, `hashToView`, and the
-`App` switch.
+[App.tsx](../../apps/web/src/App.tsx) renders a top nav (Flow F4: *Repertoires ·
+Today · Prepare* — "Browse openings" is no longer a nav destination, though `#/browse`
+stays routable via the Prepare wizard and "New repertoire"), an `ErrorBanner` bound to
+`store.error`, and one page per `view.kind`. Adding a view means touching four places:
+the union, `viewToHash`, `hashToView`, and the `App` switch.
 
 | `kind` | Page |
 |---|---|
@@ -94,14 +95,16 @@ Round-trip tests: [router.test.ts](../../apps/web/src/lib/router.test.ts).
 
 ## Navigation UX (Phase 8c)
 
-- **Daily-first home:** the repertoire list opens with a "Today" banner (total due →
-  start daily) and per-repertoire badges (due / cards / to-build) computed offline from
-  IndexedDB via [lib/repStats.ts](../../apps/web/src/lib/repStats.ts).
-- Each card shows two primary actions (**Drill**, **Build**) — since Flow F1 both open
-  the **line navigator** (`#/lines/:id/train|grow`) rather than jumping straight into a
-  walker session, so per-line sessions are discoverable; "All lines" is the first,
-  prominent row there. Edit, Classic drill, Health check, Export PGN, Rename, Delete
-  live in an `OverflowMenu`.
+- **Intent-first home (Flow F4):** Today banner (total due → start daily) → a
+  **"Prepare against…"** row (`#/prepare`) → repertoire cards with per-repertoire
+  badges (due / cards / to-build) computed offline from IndexedDB via
+  [lib/repStats.ts](../../apps/web/src/lib/repStats.ts).
+- Each card shows two primary actions (**Train**, **Grow** — Flow F4's user-facing
+  names for the drill/build seeds) — since Flow F1 both open the **line navigator**
+  (`#/lines/:id/train|grow`) rather than jumping straight into a walker session, so
+  per-line sessions are discoverable; "All lines" is the first, prominent row there.
+  Edit, Classic drill, Health check, Export PGN, Rename, Delete live in an
+  `OverflowMenu`.
 - **One creation path:** "New repertoire" routes to the opening browser — pick a line on
   a real board, "Add to my repertoire" → create new → "Start building" jumps into the
   walker. Blank and Import PGN are secondary actions in the browser/list headers.

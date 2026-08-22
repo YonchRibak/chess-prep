@@ -13,7 +13,9 @@
       "PowerShell(git checkout -b feat/flow-f3-explorer-snapshot)",
       "Read(//c/code/chess-prep/apps/api/drizzle/**)",
       "PowerShell(pnpm --filter @chess-prep/api db:generate --name explorer_snapshot 2>&1)",
-      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f3.txt\" 2>&1)"
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f3.txt\" 2>&1)",
+      "PowerShell(git checkout -b feat/flow-f4-smart-train)",
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f4.txt\" 2>&1)"
     ]
   }
 }

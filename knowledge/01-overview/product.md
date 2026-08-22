@@ -30,6 +30,25 @@ and (b) whether prep exists:
 
 See [the walker](../03-domain/walker.md) for mechanics.
 
+## The flow — intents, not mechanisms (Flow F1–F4)
+
+The UI is organized around what the user sits down to *do*, not around the machinery
+(see [FLOW_PROPOSAL.md](../../FLOW_PROPOSAL.md)). The home screen offers three verbs
+and the nav is *Repertoires · Today · Prepare*:
+
+- **Today** — the daily mixed diet, unchanged.
+- **Prepare against…** — the guided flow: name an opening, the app plays the common
+  replies at you (auto-expansion + explorer/snapshot frequency), you pick with
+  eval+popularity candidates, and every finished line is immediately rehearsed
+  ([walker — guided prepare](../03-domain/walker.md#guided-prepare-flow-f2)).
+- **Train / Grow** per repertoire — the walker's drill/build seeds, entered through
+  the [line navigator](../05-web/views-and-routing.md) so a per-line session is two
+  taps. In user-facing copy the seeds are called **Train** and **Grow**; code and
+  docs keep the `drill`/`build` identifiers.
+
+"Browse openings" is not a top-level destination: it is the Prepare wizard's search
+step and the "New repertoire" path, and remains a routable view (`#/browse`).
+
 ## Non-negotiable qualities
 
 These are product-level constraints. Don't regress them.

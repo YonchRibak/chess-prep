@@ -39,7 +39,7 @@ colliding with parked Phases 10/11.
 | **F1** ✅ | Session-scoped line scope (the stored scope demoted to default; daily-diet footgun killed) + line navigator (`#/lines/:id/train\|grow`) with per-line badges |
 | **F2** ✅ | Guided prepare: `#/prepare` wizard, `PrepTarget` presets, line-first traversal (`findNextBuildNodeLineFirst`), session-forced auto-expand, lock-in micro-rehearsal, structural coverage-to-target meter |
 | **F3** ✅ | Bundled explorer snapshot (`explorer_snapshot_entries` tier + generator/importer — the frequency floor for the dev-401 machine) + game-weighted coverage (`shared/coverage.ts`, meter upgrade). The snapshot JSONL itself still needs one `snapshot:build` run from a machine that can reach the explorer |
-| **F4** | Smart default Train queue + home re-org (Train / Prepare / Grow) + terminology pass |
+| **F4** ✅ | Smart default Train queue (`buildSmartQueue`, walker drill seed default with the five modes behind an "advanced" disclosure) + home re-org (Today · Prepare against… · Train/Grow cards; nav = Repertoires · Today · Prepare) + terminology pass (Build→Grow, Drill→Train in user-facing copy only) |
 
 ## Known debt (deliberately deferred)
 
@@ -47,6 +47,10 @@ colliding with parked Phases 10/11.
   `DailyDiet` are separate code paths. Merging them into one multi-repertoire walker is
   the intended endgame; classic drill stays reachable via the repertoire card's overflow
   menu until then. See [srs-drilling](../03-domain/srs-drilling.md#three-drill-implementations-known-debt).
+  *Smaller since F4:* the walker's default Train path no longer needs a mode picker
+  page — the smart queue replaced that surface — so consolidation now only has to
+  absorb classic drill's blindfold/walkthrough rendering and the diet's multi-rep
+  interleave.
 - **One-prep invariant has no DB constraint** — hardening it to a partial unique index
   needs a stored `is_user_side` column on `moves`, deferred to the v2 `option_label` work.
 - **No auth** — single-user via `DEFAULT_USER_ID`.

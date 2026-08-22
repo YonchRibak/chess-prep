@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDailyDietQueue, buildDrillQueue } from './queue.ts';
+import { buildDailyDietQueue, buildDrillQueue, buildSmartQueue } from './queue.ts';
 import type { RepertoireFull } from '../../api/client.ts';
 import type { DrillAttemptDto, SrsCardDto } from '@chess-prep/shared';
 
@@ -425,5 +425,114 @@ describe('drill queues — refutation shadow lines', () => {
     const cards = [makeCard('m-e4', -100), makeCard('m-Nf3', -100), makeCard('m-shadow', -1000)];
     const q = buildDrillQueue({ repertoire: rep, cards, mode: 'due', rules: {}, now: NOW });
     expect(q.map((it) => it.move.san)).not.toContain('Qh5');
+  });
+});
+
+/* ---------------- Flow F4: the smart default queue ---------------- */
+
+describe('buildSmartQueue (Flow F4)', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  function attempt(moveId: string, wasCorrect: boolean, daysAgo: number): DrillAttemptDto {
+    return {
+      id: `${moveId}-${daysAgo}`,
+      moveId,
+      repertoireId: 'rep1',
+      playedSan: 'x',
+      wasCorrect,
+      at: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
+    };
+  }
+
+  it('orders due (FSRS order) → mistakes → new', () => {
+    const rep = makeRep();
+    const cards = [
+      makeCard('m-e4', -30, { state: 2 }), // due, reviewed
+      makeCard('m-d4', -60, { state: 2 }), // due earlier → first
+      makeCard('m-Nf3', +999999, { state: 2 }), // future, but missed recently
+    ];
+    const q = buildSmartQueue({
+      repertoire: rep,
+      cards,
+      rules: {},
+      now: NOW,
+      attempts: [attempt('m-Nf3', false, 1)],
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['d4', 'e4', 'Nf3']);
+  });
+
+  it('dedupes: a due card that is also a recent mistake appears once, in the due segment', () => {
+    const rep = makeRep();
+    const cards = [
+      makeCard('m-e4', -60, { state: 2 }),
+      makeCard('m-d4', -30, { state: 2 }),
+    ];
+    const q = buildSmartQueue({
+      repertoire: rep,
+      cards,
+      rules: {},
+      now: NOW,
+      attempts: [attempt('m-e4', false, 1)],
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['e4', 'd4']);
+  });
+
+  it("caps new cards and counts today's already-shown new cards against the budget", () => {
+    const rep = makeRep();
+    const reviewedRecently = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();
+    const cards = [
+      // Already shown today (state=0, lastReview after the reset) → consumes budget.
+      makeCard('m-e4', -60, { state: 0, lastReview: reviewedRecently }),
+      makeCard('m-d4', -60, { state: 0 }),
+      makeCard('m-Nf3', -60, { state: 0 }),
+    ];
+    const q = buildSmartQueue({
+      repertoire: rep,
+      cards,
+      rules: {},
+      now: NOW,
+      newCardsPerDay: 2,
+      dailyResetAt: new Date(NOW.getTime() - 24 * 60 * 60 * 1000),
+    });
+    // Budget 2, one consumed → exactly one fresh new card enters.
+    expect(q.filter((it) => it.card.state === 0).length).toBeLessThanOrEqual(2);
+    const freshOnly = q.filter(
+      (it) => it.card.state === 0 && it.card.lastReview === null,
+    );
+    expect(freshOnly.length).toBe(1);
+  });
+
+  it('composes with a line scope before segmenting', () => {
+    const rep = makeRep();
+    rep.moves = rep.moves.map((m) => (m.id === 'm-d4' ? { ...m, lineTags: ['vs-danny'] } : m));
+    const cards = [
+      makeCard('m-e4', -60, { state: 2 }),
+      makeCard('m-d4', -60, { state: 2 }),
+      makeCard('m-Nf3', -60, { state: 0 }),
+    ];
+    const q = buildSmartQueue({
+      repertoire: rep,
+      cards,
+      rules: { scope: { kind: 'tag', value: 'vs-danny' } },
+      now: NOW,
+      attempts: [attempt('m-e4', false, 1)], // out of scope — must not appear
+    });
+    expect(q.map((it) => it.move.san)).toEqual(['d4']);
+  });
+
+  it('never drills a refutation shadow move, even with a card', () => {
+    const rep = makeRep();
+    rep.moves.push({
+      id: 'm-shadow', parentPositionId: 'p3', childPositionId: 'p4',
+      parentFenKey: 'r3', childFenKey: 'r4', san: 'Qh5', uci: 'd1h5',
+      comment: null, annotation: null, isMainLine: false, priority: 0,
+      isDropped: false, lineTags: [], isRefutation: true,
+    });
+    const q = buildSmartQueue({
+      repertoire: rep,
+      cards: [makeCard('m-shadow', -999, { state: 2 })],
+      rules: {},
+      now: NOW,
+    });
+    expect(q).toEqual([]);
   });
 });

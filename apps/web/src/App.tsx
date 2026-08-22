@@ -18,10 +18,10 @@ const VIEW_LABEL: Record<string, string> = {
   list: 'Repertoires',
   browse: 'Browse openings',
   editor: 'Editor',
-  'drill-setup': 'Drill setup',
-  'drill-session': 'Drilling',
-  'walker-session': 'Walker',
-  daily: 'Daily diet',
+  'drill-setup': 'Classic drill setup',
+  'drill-session': 'Classic drill',
+  'walker-session': 'Session',
+  daily: 'Today',
   'health-check': 'Health check',
   lines: 'Lines',
   prepare: 'Prepare',
@@ -57,23 +57,20 @@ export function App() {
             >
               Repertoires
             </Btn>
+            {/* Flow F4: nav = Repertoires · Today · Prepare. Browse openings
+                stops being a destination — it's the Prepare wizard's search
+                step and stays reachable from there and from "New repertoire". */}
             <Btn
               variant={view.kind === 'daily' ? 'primary' : 'ghost'}
               onClick={() => go({ kind: 'daily' })}
             >
-              Daily
+              Today
             </Btn>
             <Btn
               variant={view.kind === 'prepare' ? 'primary' : 'ghost'}
               onClick={() => go({ kind: 'prepare' })}
             >
               Prepare
-            </Btn>
-            <Btn
-              variant={view.kind === 'browse' ? 'primary' : 'ghost'}
-              onClick={() => go({ kind: 'browse' })}
-            >
-              Browse openings
             </Btn>
           </nav>
         </div>

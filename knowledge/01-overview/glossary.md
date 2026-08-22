@@ -51,3 +51,5 @@ Terms used consistently across code, spec, and these docs.
 | **Prep target** | The guided session's finish line: a reply-share floor (`minShare`) plus a depth cap (`maxDepthPlies`). Presets in [prep.ts](../../packages/shared/src/prep.ts); persisted per repertoire inside `drill_rules.prepTarget` (an accepted misfiling — it's a growth setting, kept there to stay migration-free). |
 | **Lock-in** | The micro-rehearsal after a line is built: replay exactly those moves, graded with real FSRS grades and logged attempts, then back to building. Closes the "decide *and then rehearse*" gap. |
 | **Session scope** | Flow F1: a line scope carried by the view/hash for one session, never written to stored rules. [srs-drilling](../03-domain/srs-drilling.md#session-scope-vs-stored-scope-flow-f1) |
+| **Train / Grow** | Flow F4's user-facing names for the walker's `drill` / `build` seeds. Copy only — identifiers, hashes, and these docs keep `drill`/`build`. |
+| **Smart queue** | The default Train queue: due → recent mistakes → new (capped, sharing the daily diet's new-card budget). [srs-drilling](../03-domain/srs-drilling.md#the-smart-default-queue-flow-f4) |

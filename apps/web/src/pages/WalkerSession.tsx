@@ -31,6 +31,7 @@ import {
   selectOpponentReplies,
   Grade,
   type Color,
+  type DrillMode,
   type ExplorerEntry,
   type LineScope,
   type PrepTarget,
@@ -46,7 +47,7 @@ import { OpeningHeader } from '../components/OpeningHeader.tsx';
 import { MoveLine } from '../components/MoveLine.tsx';
 import { BuilderPrompt } from '../components/BuilderPrompt.tsx';
 import { api, ApiError, type RepertoireFull, type RepertoireMove, type RepertoirePosition } from '../api/client.ts';
-import { getAllCardsLocal } from '../lib/idb/schema.ts';
+import { getAllCardsLocal, getAttemptsLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import {
   engineLinesToCandidates,
@@ -61,7 +62,7 @@ import { gradeAndQueue, logAttempt, pullSince } from '../lib/srs/sync.ts';
 import { emptyCardFor } from '../lib/srs/scheduler.ts';
 import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
 import { RefutationPrompt } from '../components/RefutationPrompt.tsx';
-import { buildDrillQueue, type DrillItem } from '../lib/drill/queue.ts';
+import { buildDrillQueue, buildSmartQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import { useEngine } from '../lib/engine/useEngine.ts';
 import { engineArrows } from '../lib/engine/arrows.ts';
@@ -81,6 +82,22 @@ import {
 import type { BoardColor } from '../lib/chess/useBoard.ts';
 
 type WalkerSeed = 'build' | 'drill';
+
+/**
+ * Flow F4: the drill seed's queue selection. 'smart' (the default) is
+ * due → recent mistakes → new cards in one queue; the five explicit modes
+ * stay reachable behind the "advanced" disclosure on the session screen.
+ */
+type WalkerDrillMode = 'smart' | DrillMode;
+
+const WALKER_DRILL_MODES: Array<{ value: WalkerDrillMode; label: string }> = [
+  { value: 'smart', label: 'Smart (default)' },
+  { value: 'due', label: 'Due only' },
+  { value: 'walkthrough', label: 'Walkthrough' },
+  { value: 'weak', label: 'Weak spots' },
+  { value: 'random', label: 'Random' },
+  { value: 'mistakes', label: 'Recent mistakes' },
+];
 
 type Phase =
   | { kind: 'loading' }
@@ -193,6 +210,9 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
   const [stats, setStats] = useState({ correct: 0, wrong: 0, savedMoves: 0, autoAdded: 0 });
   const [drillQueue, setDrillQueue] = useState<DrillItem[] | null>(null);
   const [drillCursor, setDrillCursor] = useState(0);
+  // Flow F4: which queue the drill seed builds. Changing it restarts the
+  // session bootstrap (it's an effect dependency) with a fresh queue.
+  const [drillMode, setDrillMode] = useState<WalkerDrillMode>('smart');
   const [error, setError] = useState<string | null>(null);
   const [pendingSwap, setPendingSwap] = useState<PendingSwap | null>(null);
 
@@ -460,13 +480,42 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
         const cards = await getAllCardsLocal();
         if (cancelled) return;
         const rules2 = { ...mergeDrillRules(active.drillRules), scope: scopeOptions.scope };
-        const queue = buildDrillQueue({
-          repertoire: active,
-          cards,
-          mode: 'due',
-          rules: rules2,
-          openingLookup: scopeOptions.openingLookup,
-        });
+        const attempts = await getAttemptsLocal();
+        if (cancelled) return;
+        let queue: DrillItem[];
+        if (drillMode === 'smart') {
+          // Flow F4: the smart default — due → mistakes → new. The new-card
+          // budget shares the daily diet's cap; settings are best-effort
+          // (offline falls back to the defaults, which match the diet's).
+          let capArgs: { newCardsPerDay?: number; dailyResetAt?: Date } = {};
+          try {
+            const s = await api.getUserSettings();
+            capArgs = {
+              newCardsPerDay: s.newCardsPerDay,
+              dailyResetAt: new Date(s.dailyDietLastResetAt),
+            };
+          } catch {
+            /* offline — defaults */
+          }
+          if (cancelled) return;
+          queue = buildSmartQueue({
+            repertoire: active,
+            cards,
+            rules: rules2,
+            attempts,
+            openingLookup: scopeOptions.openingLookup,
+            ...capArgs,
+          });
+        } else {
+          queue = buildDrillQueue({
+            repertoire: active,
+            cards,
+            mode: drillMode,
+            rules: rules2,
+            openingLookup: scopeOptions.openingLookup,
+            attempts,
+          });
+        }
         if (cancelled) return;
         setDrillQueue(queue);
         if (queue.length === 0) {
@@ -485,7 +534,7 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
       transitionAbortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, seed, guided, sessionScope?.kind, sessionScope?.value]);
+  }, [active?.id, seed, guided, drillMode, sessionScope?.kind, sessionScope?.value]);
 
   /* ---------------- keyboard shortcuts ---------------- */
 
@@ -1220,7 +1269,7 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
             ← All repertoires
           </button>
           <h2 className="text-lg font-semibold">
-            {guided ? 'Prepare' : seed === 'build' ? 'Build' : 'Drill'}: {active.name}
+            {guided ? 'Prepare' : seed === 'build' ? 'Grow' : 'Train'}: {active.name}
           </h2>
           <span className="text-xs text-slate-500">
             {active.color === 'white' ? '♔ White' : '♚ Black'}
@@ -1498,6 +1547,33 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
               />
             )}
 
+            {seed === 'drill' && (
+              <details className="text-xs text-slate-400">
+                <summary className="cursor-pointer select-none text-[10px] uppercase tracking-wide text-slate-500">
+                  Advanced: queue mode
+                </summary>
+                <div className="flex flex-wrap gap-1 pt-2">
+                  {WALKER_DRILL_MODES.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setDrillMode(m.value)}
+                      className={`px-2 py-0.5 rounded border text-[10px] ${
+                        drillMode === m.value
+                          ? 'border-emerald-700 bg-emerald-900/40 text-emerald-200'
+                          : 'border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-500 pt-1">
+                  Switching rebuilds the queue and restarts the session.
+                </p>
+              </details>
+            )}
+
             <DroppedListPanel
               rep={active}
               indices={indices}
@@ -1713,7 +1789,7 @@ function CompletePane({
         </p>
       ) : (
         <p className="text-sm text-slate-300">
-          No more due cards for now. Come back later or run a Build session to grow coverage.
+          No more cards for now. Come back later, or grow this repertoire's coverage.
         </p>
       )}
       {(totalAnswered > 0 || stats.savedMoves > 0) && (
@@ -1738,11 +1814,11 @@ function CompletePane({
             </Btn>
             {seed === 'drill' ? (
               <Btn onClick={() => go({ kind: 'walker-session', repertoireId: active.id, seed: 'build' })}>
-                Switch to Build
+                Switch to Grow
               </Btn>
             ) : (
               <Btn onClick={() => go({ kind: 'walker-session', repertoireId: active.id, seed: 'drill' })}>
-                Switch to Drill
+                Switch to Train
               </Btn>
             )}
           </>

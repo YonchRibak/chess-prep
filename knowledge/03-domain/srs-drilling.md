@@ -108,6 +108,21 @@ Five modes (`DrillMode`):
 
 Dropped moves are excluded everywhere.
 
+### The smart default queue (Flow F4)
+
+`buildSmartQueue(args)` (same file) is what the walker drill seed's default — the
+**Train** button — builds: **due (FSRS order) → recent mistakes (9d ranking, deduped
+against due, due date ignored) → new cards**, capped by `newCardsPerDay` and counted
+with the same `lastReview > dailyDietLastResetAt` mechanism as the daily diet, so a
+Train session and a diet session share one new-card budget instead of double-spending
+it (an already-shown-today new card neither re-enters the new segment nor frees its
+slot). Scope and the other rules filter first, as everywhere.
+
+The five explicit modes stay selectable behind an "advanced" disclosure in the walker
+session; classic `DrillSession`/`DrillSetup` are untouched pending consolidation —
+this is a queue-builder change consumed by the walker only, deliberately not a fourth
+drill implementation.
+
 Two inputs fail **closed** rather than open, for the same reason: a session that silently
 widens to the whole tree is indistinguishable from a correct one until the user notices
 they're drilling the wrong thing. Omitting `openingLookup` under an `openingName` scope

@@ -140,6 +140,22 @@ export function RepertoireList() {
         </div>
       </Card>
 
+      {/* ---- Flow F4: the guided flow is a first-class home row ---- */}
+      <Card>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Prepare against…</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Name an opening; the app plays the common replies at you and helps
+              you pick — then rehearses what you built.
+            </p>
+          </div>
+          <Btn variant="default" onClick={() => go({ kind: 'prepare' })}>
+            Start
+          </Btn>
+        </div>
+      </Card>
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Repertoires</h2>
         <div className="flex gap-2">
@@ -244,13 +260,13 @@ export function RepertoireList() {
                     variant={s && s.dueCards > 0 ? 'primary' : 'default'}
                     onClick={() => void openLines(r.id, 'train')}
                   >
-                    Drill{s && s.dueCards > 0 ? ` (${s.dueCards})` : ''}
+                    Train{s && s.dueCards > 0 ? ` (${s.dueCards})` : ''}
                   </Btn>
                   <Btn
                     variant={s && s.dueCards === 0 && s.uncovered > 0 ? 'primary' : 'default'}
                     onClick={() => void openLines(r.id, 'grow')}
                   >
-                    Build
+                    Grow
                   </Btn>
                   <div className="ml-auto">
                     <OverflowMenu
