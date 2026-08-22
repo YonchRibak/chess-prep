@@ -85,6 +85,15 @@ export function RepertoireList() {
     if (s) dueBySide[r.color] += s.dueCards;
   }
 
+  async function openLines(id: string, intent: 'train' | 'grow') {
+    try {
+      await useAppStore.getState().loadRepertoire(id);
+      go({ kind: 'lines', repertoireId: id, intent });
+    } catch {
+      /* error already surfaced by loadRepertoire */
+    }
+  }
+
   async function handleExport(r: RepertoireSummary) {
     const pgn = await exportPgn(r.id);
     const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
@@ -227,25 +236,19 @@ export function RepertoireList() {
                 </div>
 
                 <div className="flex gap-2 pt-1 items-center">
+                  {/* Flow F1: both buttons land on the line navigator, where
+                      "All" is one more tap and per-line sessions become
+                      discoverable at all. loadRepertoire (not openRepertoire)
+                      so the editor view never flashes into history. */}
                   <Btn
                     variant={s && s.dueCards > 0 ? 'primary' : 'default'}
-                    onClick={async () => {
-                      await openRepertoire(r.id);
-                      useAppStore
-                        .getState()
-                        .go({ kind: 'walker-session', repertoireId: r.id, seed: 'drill' });
-                    }}
+                    onClick={() => void openLines(r.id, 'train')}
                   >
                     Drill{s && s.dueCards > 0 ? ` (${s.dueCards})` : ''}
                   </Btn>
                   <Btn
                     variant={s && s.dueCards === 0 && s.uncovered > 0 ? 'primary' : 'default'}
-                    onClick={async () => {
-                      await openRepertoire(r.id);
-                      useAppStore
-                        .getState()
-                        .go({ kind: 'walker-session', repertoireId: r.id, seed: 'build' });
-                    }}
+                    onClick={() => void openLines(r.id, 'grow')}
                   >
                     Build
                   </Btn>

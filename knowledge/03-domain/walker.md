@@ -93,6 +93,13 @@ needs scope `all`. `WalkerSession` resolves the scope once at session start and 
 in a ref, so the `resumeBuild` path can't close over a stale value and quietly fall back
 to building the whole tree.
 
+**Where the scope comes from (Flow F1):** the view's session scope
+(`walker-session.scope`, set by the [line navigator](../05-web/views-and-routing.md) or
+a deep link) when present, else the stored `drillRules.scope` as the default — the
+precedence order in
+[srs-drilling](srs-drilling.md#session-scope-vs-stored-scope-flow-f1). The session
+never writes the scope back.
+
 ## Drill seed
 
 The drill queue ([queue.ts](../../apps/web/src/lib/drill/queue.ts), oldest-due-first)

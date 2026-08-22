@@ -12,12 +12,48 @@
  *   #/drill/:id/:mode       → classic drill session
  *   #/walker/:id/:seed      → walker session (build | drill)
  *   #/health/:id            → repertoire health check
+ *   #/lines/:id/:intent     → line navigator (train | grow)
+ *
+ * Flow F1: drill/walker hashes accept an optional `?scope=kind:value` suffix
+ * (e.g. `#/walker/:id/drill?scope=openingName:Caro-Kann%20Defense`) carrying a
+ * session-scoped line scope. It lives in the hash — not only in store state —
+ * so a deep-linked or refreshed scoped session stays scoped. A malformed scope
+ * param is treated as ABSENT (the session falls back to the stored rules),
+ * keeping `hashToView` total.
  */
 import { useEffect } from 'react';
-import type { DrillMode } from '@chess-prep/shared';
+import { parseLineScope, type DrillMode, type LineScope } from '@chess-prep/shared';
 import { useAppStore, type View } from '../store/app.ts';
 
-const DRILL_MODES: DrillMode[] = ['due', 'walkthrough', 'weak', 'random'];
+const DRILL_MODES: DrillMode[] = ['due', 'walkthrough', 'weak', 'random', 'mistakes'];
+
+/** `?scope=kind:value` suffix, or '' — 'all' and valueless scopes encode as nothing. */
+function scopeToParam(scope: LineScope | undefined): string {
+  if (!scope || scope.kind === 'all' || !scope.value?.trim()) return '';
+  return `?scope=${encodeURIComponent(`${scope.kind}:${scope.value}`)}`;
+}
+
+function parseScopeParam(query: string): LineScope | undefined {
+  const raw = new URLSearchParams(query).get('scope');
+  if (!raw) return undefined;
+  const sep = raw.indexOf(':');
+  // The value may itself contain ':' ("Caro-Kann Defense: Advance Variation"),
+  // so only the FIRST colon separates kind from value.
+  const kind = sep >= 0 ? raw.slice(0, sep) : raw;
+  const value = sep >= 0 ? raw.slice(sep + 1) : undefined;
+  try {
+    const scope = parseLineScope({ kind, value });
+    return scope?.kind === 'all' ? undefined : scope;
+  } catch {
+    return undefined; // malformed → session falls back to stored rules
+  }
+}
+
+/** Spreadable `{ scope }` — empty when absent, so unscoped views stay key-free. */
+function scopeProp(query: string): { scope?: LineScope } {
+  const scope = parseScopeParam(query);
+  return scope ? { scope } : {};
+}
 
 export function viewToHash(v: View): string {
   switch (v.kind) {
@@ -32,16 +68,21 @@ export function viewToHash(v: View): string {
     case 'drill-setup':
       return `#/drill-setup/${v.repertoireId}`;
     case 'drill-session':
-      return `#/drill/${v.repertoireId}/${v.mode}`;
+      return `#/drill/${v.repertoireId}/${v.mode}${scopeToParam(v.scope)}`;
     case 'walker-session':
-      return `#/walker/${v.repertoireId}/${v.seed}`;
+      return `#/walker/${v.repertoireId}/${v.seed}${scopeToParam(v.scope)}`;
     case 'health-check':
       return `#/health/${v.repertoireId}`;
+    case 'lines':
+      return `#/lines/${v.repertoireId}/${v.intent}`;
   }
 }
 
 export function hashToView(hash: string): View | null {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+  const qIdx = hash.indexOf('?');
+  const path = qIdx >= 0 ? hash.slice(0, qIdx) : hash;
+  const query = qIdx >= 0 ? hash.slice(qIdx + 1) : '';
+  const parts = path.replace(/^#\/?/, '').split('/').filter(Boolean);
   if (parts.length === 0) return { kind: 'list' };
   const [head, id, arg] = parts;
   switch (head) {
@@ -55,14 +96,23 @@ export function hashToView(hash: string): View | null {
       return id ? { kind: 'drill-setup', repertoireId: id } : null;
     case 'drill':
       return id && arg && (DRILL_MODES as string[]).includes(arg)
-        ? { kind: 'drill-session', repertoireId: id, mode: arg as DrillMode }
+        ? {
+            kind: 'drill-session',
+            repertoireId: id,
+            mode: arg as DrillMode,
+            ...scopeProp(query),
+          }
         : null;
     case 'walker':
       return id && (arg === 'build' || arg === 'drill')
-        ? { kind: 'walker-session', repertoireId: id, seed: arg }
+        ? { kind: 'walker-session', repertoireId: id, seed: arg, ...scopeProp(query) }
         : null;
     case 'health':
       return id ? { kind: 'health-check', repertoireId: id } : null;
+    case 'lines':
+      return id && (arg === 'train' || arg === 'grow')
+        ? { kind: 'lines', repertoireId: id, intent: arg }
+        : null;
     default:
       return null;
   }

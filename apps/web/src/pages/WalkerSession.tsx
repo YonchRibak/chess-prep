@@ -32,6 +32,7 @@ import {
   Grade,
   type Color,
   type ExplorerEntry,
+  type LineScope,
   type RankedReply,
   type SrsCardDto,
   type UserCandidate,
@@ -135,9 +136,15 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
 interface WalkerSessionProps {
   seed: WalkerSeed;
+  /**
+   * Flow F1: session-scoped line scope from the view (deep link / navigator).
+   * Takes precedence over the stored `drillRules.scope`, which remains the
+   * editor-level default — the session never writes it back.
+   */
+  scope?: LineScope;
 }
 
-export function WalkerSession({ seed }: WalkerSessionProps) {
+export function WalkerSession({ seed, scope: sessionScope }: WalkerSessionProps) {
   const active = useAppStore((s) => s.active);
   const go = useAppStore((s) => s.go);
   const reloadActive = useAppStore((s) => s.reloadActive);
@@ -321,12 +328,13 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
     setPendingSwap(null);
 
     (async () => {
-      // Phase 9a: the repertoire's line scope steers BOTH seeds — building
-      // inside one line, and drilling only that line's cards.
+      // Phase 9a: a line scope steers BOTH seeds — building inside one line,
+      // and drilling only that line's cards. Flow F1: the view's session scope
+      // wins over the stored rules, which are only the default.
       const names = await ensureOpeningNames([active]);
       if (cancelled) return;
       const scopeOptions = {
-        scope: mergeDrillRules(active.drillRules).scope,
+        scope: sessionScope ?? mergeDrillRules(active.drillRules).scope,
         openingLookup: openingNameLookup(names),
       };
       scopeOptionsRef.current = scopeOptions;
@@ -344,7 +352,7 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
         // drill seed: load cards and build queue
         const cards = await getAllCardsLocal();
         if (cancelled) return;
-        const rules2 = mergeDrillRules(active.drillRules);
+        const rules2 = { ...mergeDrillRules(active.drillRules), scope: scopeOptions.scope };
         const queue = buildDrillQueue({
           repertoire: active,
           cards,
@@ -370,7 +378,7 @@ export function WalkerSession({ seed }: WalkerSessionProps) {
       transitionAbortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, seed]);
+  }, [active?.id, seed, sessionScope?.kind, sessionScope?.value]);
 
   /* ---------------- keyboard shortcuts ---------------- */
 

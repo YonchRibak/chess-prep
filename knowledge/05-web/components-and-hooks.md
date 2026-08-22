@@ -60,6 +60,23 @@ i.e. [line scopes](../03-domain/opening-database.md#client-hooks) — uses `name
 There is no component library — `ui.tsx` is the whole design system. Add primitives there
 rather than one-off Tailwind blobs in pages.
 
+## Line navigator (Flow F1)
+
+[pages/LineNavigator.tsx](../../apps/web/src/pages/LineNavigator.tsx) renders the
+per-line rows for a repertoire; the aggregation is pure, in
+[lib/lines/lineIndex.ts](../../apps/web/src/lib/lines/lineIndex.ts)
+([tests](../../apps/web/src/lib/lines/lineIndex.test.ts)).
+
+`buildLineIndex(...)` → `LineNavEntry[]`: "All lines" first, then opening-name entries
+nested by boundary prefix, then tag entries. Each entry carries `dueCount` /
+`cardCount` / `toBuild` / `recentMisses` and the `LineScope` its Start button launches
+with. The counts are built **from `collectDrillCandidates`** (the queue builder's own
+candidate pass) and mirror `findNextBuildNode`'s attention/scope rules, so a badge can
+never promise a different session than the one it starts. The page warms the name cache
+on load; a cold cache shows a "names not cached — go online once" hint instead of
+silently listing no named lines (the fail-closed rule in
+[srs-drilling](../03-domain/srs-drilling.md#line-scopes-phase-9a)).
+
 ## Board interaction rules
 
 Two gestures must stay visually distinct (see [walker](../03-domain/walker.md#two-gestures--keep-them-visually-distinct)):

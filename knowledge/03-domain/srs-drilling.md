@@ -36,7 +36,7 @@ Per-repertoire, stored as partial jsonb, always read through `mergeDrillRules()`
 | `branching` | `'all'` | `'all'` or `'main_line_only'` (only `isMainLine` moves) |
 | `blindfold` | `false` | Hide pieces; show the move list only |
 | `evalAfterAnswer` | `false` | Reveal engine eval after grading |
-| `scope` | `{ kind: 'all' }` | Phase 9a line scope — see below. Composes with the rules above |
+| `scope` | `{ kind: 'all' }` | Phase 9a line scope — see below. Composes with the rules above. Since Flow F1 this is only the **default**: a session-scoped override wins |
 
 ## Line scopes (Phase 9a)
 
@@ -55,6 +55,24 @@ Honored by `buildDrillQueue`, `buildDailyDietQueue` (so a scoped repertoire cont
 only its scoped cards to the daily diet), and the walker's build seed
 ([walker](walker.md#scoped-building)) — a scope change must be applied to all
 [three drill implementations](#three-drill-implementations-known-debt).
+
+### Session scope vs. stored scope (Flow F1)
+
+Where a session's scope comes from, in precedence order:
+
+1. **The view's `scope`** (`walker-session` / `drill-session`, carried in the hash —
+   [views-and-routing](../05-web/views-and-routing.md)). Set by the
+   [line navigator](../05-web/components-and-hooks.md)'s Start buttons or a deep link.
+   **Session-local**: it is never written to `drillRules`.
+2. **The stored `drillRules.scope`** — now an editor-level *default* for a permanently
+   narrowed repertoire, applied only when the view carries no scope.
+
+**The daily diet reads only stored rules** and cannot see session scopes — by design.
+Before F1, "drill only the Winawer tonight" meant editing the stored scope, and because
+`buildDailyDietQueue` honors that same stored scope, a one-night narrowing silently
+shrank every following day's diet until the user remembered to widen it back. The
+session override kills that footgun: narrowing a session no longer writes anything, so
+the stored rules — and tomorrow's diet — are byte-identical before and after.
 
 **Names come from a local cache, and a cold cache fails closed.** Scope filtering runs
 inside the synchronous queue builders and must behave identically offline, so names are
@@ -93,6 +111,11 @@ Two inputs fail **closed** rather than open, for the same reason: a session that
 widens to the whole tree is indistinguishable from a correct one until the user notices
 they're drilling the wrong thing. Omitting `openingLookup` under an `openingName` scope
 yields an empty queue; omitting `attempts` under `mode: 'mistakes'` does too.
+
+`collectDrillCandidates` (same file) is the queue's pre-scope candidate pass, exported
+so the Flow F1 [line navigator](../05-web/components-and-hooks.md) can bucket the *same*
+items per line — its per-line `dueCount` is by construction the length of the queue its
+Start button launches, instead of a re-derivation that could drift.
 
 ## Flow mode
 

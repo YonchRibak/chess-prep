@@ -8,6 +8,7 @@ import {
   type DrillAttemptDto,
   type DrillMode,
   type DrillRules,
+  type LineScopeContext,
   type OpeningId,
   type SrsCardDto,
 } from '@chess-prep/shared';
@@ -59,26 +60,38 @@ export interface BuildQueueArgs {
 }
 
 /**
- * Build a drill queue for a given mode + rules.
- * The result is the ordered list of items to present to the user.
+ * A queue candidate before the scope filter, carrying the facts the scope
+ * predicate needs. Exposed (with `collectDrillCandidates`) so the Flow F1 line
+ * navigator can bucket the SAME items per line scope — a navigator that
+ * re-derived them would drift from the queue its Start button launches.
  */
-export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
-  const {
-    repertoire,
-    cards,
-    mode,
-    rules: rulesIn,
-    now = new Date(),
-    rng = Math.random,
-    openingLookup,
-    attempts,
-  } = args;
-  const rules = mergeDrillRules(rulesIn);
-  const scope = rules.scope;
-  // The name index is only built when a name scope is active — it's a full BFS
-  // and every other scope kind ignores it.
+export interface DrillCandidate extends DrillItem {
+  scopeCtx: LineScopeContext;
+}
+
+export interface CollectCandidatesArgs {
+  repertoire: RepertoireFull;
+  cards: SrsCardDto[];
+  /** Merged rules; every rule EXCEPT `scope` is applied here. */
+  rules: Required<DrillRules>;
+  openingLookup?: (fenKey: string) => OpeningId | null;
+  /**
+   * Build the deepest-name index even when `rules.scope` doesn't need it —
+   * the line navigator always needs names to derive its opening entries.
+   */
+  withOpeningNames?: boolean;
+}
+
+/**
+ * Collect every card-backed, rule-passing candidate item — everything
+ * `buildDrillQueue` does before its scope filter and mode ordering.
+ */
+export function collectDrillCandidates(args: CollectCandidatesArgs): DrillCandidate[] {
+  const { repertoire, cards, rules, openingLookup, withOpeningNames } = args;
+  // The name index is a full BFS, so it's only built when something will read
+  // it: an active name scope, or a caller that asked for names outright.
   const deepestByPositionId =
-    scope.kind === 'openingName'
+    withOpeningNames || rules.scope.kind === 'openingName'
       ? buildDeepestOpeningIndex(repertoire, openingLookup ?? (() => null))
       : null;
 
@@ -111,8 +124,7 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
     }
   }
 
-  // Build the candidate item list, then filter by rules.
-  const items: DrillItem[] = [];
+  const items: DrillCandidate[] = [];
   for (const m of prepMoves) {
     if (m.isDropped) continue; // Phase 7: walker skips dropped branches.
     const card = cardByMoveId.get(m.id);
@@ -127,20 +139,47 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
     if (rules.maxDepth && rules.maxDepth > 0 && depth > rules.maxDepth) continue;
     if (rules.branching === 'main_line_only' && !m.isMainLine) continue;
 
-    // Phase 9a scope. The name is taken at the move's CHILD position — the
-    // card belongs to the line it creates, so a move that first enters the
+    // Phase 9a scope context. The name is taken at the move's CHILD position —
+    // the card belongs to the line it creates, so a move that first enters the
     // Advance Variation is in scope for "…Advance Variation".
-    if (
-      !matchesLineScope(scope, {
+    items.push({
+      card,
+      move: m,
+      parentPosition: parent,
+      depth,
+      scopeCtx: {
         deepestOpening: deepestByPositionId?.get(m.childPositionId) ?? null,
         lineTags: m.lineTags ?? [],
-      })
-    ) {
-      continue;
-    }
-
-    items.push({ card, move: m, parentPosition: parent, depth });
+      },
+    });
   }
+  return items;
+}
+
+/**
+ * Build a drill queue for a given mode + rules.
+ * The result is the ordered list of items to present to the user.
+ */
+export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
+  const {
+    repertoire,
+    cards,
+    mode,
+    rules: rulesIn,
+    now = new Date(),
+    rng = Math.random,
+    openingLookup,
+    attempts,
+  } = args;
+  const rules = mergeDrillRules(rulesIn);
+  const scope = rules.scope;
+
+  const items: DrillItem[] = collectDrillCandidates({
+    repertoire,
+    cards,
+    rules,
+    openingLookup,
+  }).filter((c) => matchesLineScope(scope, c.scopeCtx));
 
   switch (mode) {
     case 'due': {
@@ -181,7 +220,19 @@ export function buildDrillQueue(args: BuildQueueArgs): DrillItem[] {
     case 'walkthrough': {
       // Walk the main line from root, emitting user-side cards as we go and
       // remembering the opponent's main-line response after each one so the
-      // session can auto-play it for visual continuity.
+      // session can auto-play it for visual continuity. Needs the tree shape
+      // (edges, not just card items), so it builds its own move index.
+      const positionById = new Map(repertoire.positions.map((p) => [p.id, p]));
+      const movesByParentId = new Map<string, RepertoireMove[]>();
+      for (const m of repertoire.moves) {
+        if (m.isRefutation) continue;
+        const arr = movesByParentId.get(m.parentPositionId) ?? [];
+        arr.push(m);
+        movesByParentId.set(m.parentPositionId, arr);
+      }
+      const rootPosition = repertoire.positions.find(
+        (p) => p.fenKey === repertoire.rootFenKey,
+      );
       const path: DrillItem[] = [];
       if (!rootPosition) return path;
       const visited = new Set<string>();

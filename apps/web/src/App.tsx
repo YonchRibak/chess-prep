@@ -8,6 +8,7 @@ import { HealthCheckPage } from './pages/HealthCheck.tsx';
 import { BrowseOpenings } from './pages/BrowseOpenings.tsx';
 import { WalkerSession } from './pages/WalkerSession.tsx';
 import { DailyDiet } from './pages/DailyDiet.tsx';
+import { LineNavigator } from './pages/LineNavigator.tsx';
 import { Btn, ErrorBanner } from './components/ui.tsx';
 import { attachOnlineFlush, flushQueue } from './lib/srs/sync.ts';
 import { useHashRouting } from './lib/router.ts';
@@ -21,6 +22,7 @@ const VIEW_LABEL: Record<string, string> = {
   'walker-session': 'Walker',
   daily: 'Daily diet',
   'health-check': 'Health check',
+  lines: 'Lines',
 };
 
 export function App() {
@@ -76,9 +78,12 @@ export function App() {
         {view.kind === 'editor' && <RepertoireEditor />}
         {view.kind === 'drill-setup' && <DrillSetup />}
         {view.kind === 'drill-session' && <DrillSession />}
-        {view.kind === 'walker-session' && <WalkerSession seed={view.seed} />}
+        {view.kind === 'walker-session' && (
+          <WalkerSession seed={view.seed} scope={view.scope} />
+        )}
         {view.kind === 'daily' && <DailyDiet />}
         {view.kind === 'health-check' && <HealthCheckPage />}
+        {view.kind === 'lines' && <LineNavigator intent={view.intent} />}
       </main>
 
       {error && <ErrorBanner message={error} onClose={clearError} />}

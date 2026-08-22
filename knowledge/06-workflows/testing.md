@@ -25,6 +25,8 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [autoExpand.test.ts](../../apps/web/src/lib/walker/autoExpand.test.ts) | Phase 9c: that auto-expansion **never re-adds a dropped branch**, never writes from book-ordered (alphabetical) candidates, and stays capped |
 | [candidates.test.ts](../../apps/web/src/lib/openings/candidates.test.ts) | UCI→SAN conversion at the engine boundary, dropping stale/illegal lines, and that book rows carry no fake 0% frequency |
 | [scheduler.test.ts](../../apps/web/src/lib/srs/scheduler.test.ts) | FSRS DTO ↔ card conversion and grading |
+| [router.test.ts](../../apps/web/src/lib/router.test.ts) | Flow F1: view ↔ hash round-trips for every view kind, including session scopes with spaces and interior colons; that a malformed `?scope=` param degrades to *absent* (stored rules apply) rather than nulling a valid route or inventing a scope |
+| [lineIndex.test.ts](../../apps/web/src/lib/lines/lineIndex.test.ts) | Flow F1 line navigator: name-hierarchy nesting, tag entries, dropped/refutation exclusion, misses-per-line — and the property the navigator exists to keep: each entry's `dueCount` **equals the length of the due queue its Start button launches** with the same scope |
 | [engine.test.ts](../../apps/web/src/lib/engine/engine.test.ts) | UCI parsing, and **`setGated`** |
 | [arrows.test.ts](../../apps/web/src/lib/engine/arrows.test.ts) | Rank → brush/color mapping |
 | [useChessRules.test.ts](../../apps/web/src/lib/chess/useChessRules.test.ts) | Rules wrapper |

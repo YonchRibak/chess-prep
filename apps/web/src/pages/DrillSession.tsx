@@ -3,6 +3,7 @@ import {
   Grade,
   mergeDrillRules,
   type DrillMode,
+  type LineScope,
   type OpeningId,
 } from '@chess-prep/shared';
 import { useAppStore } from '../store/app.ts';
@@ -51,6 +52,11 @@ export function DrillSession() {
   const modeRef = useRef<DrillMode>(
     view.kind === 'drill-session' ? view.mode : 'due',
   );
+  // Flow F1: session scope from the view (deep link / navigator). Pinned like
+  // the mode; overrides the stored `drillRules.scope` without ever writing it.
+  const sessionScopeRef = useRef<LineScope | undefined>(
+    view.kind === 'drill-session' ? view.scope : undefined,
+  );
 
   // Kept in a ref rather than state: it is only read inside the wrong-answer
   // handler, and re-rendering the board because a name cache filled would
@@ -86,7 +92,8 @@ export function DrillSession() {
     (async () => {
       const cards = await getAllCardsLocal();
       if (cancelled) return;
-      const drillRules = mergeDrillRules(active.drillRules);
+      const merged = mergeDrillRules(active.drillRules);
+      const drillRules = { ...merged, scope: sessionScopeRef.current ?? merged.scope };
       // Phase 9a: the same name cache the setup screen previewed with, so the
       // session's queue matches the count the user saw before starting.
       const names = await ensureOpeningNames([active]);

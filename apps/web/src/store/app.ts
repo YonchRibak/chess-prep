@@ -5,7 +5,7 @@ import {
   type RepertoireFull,
   type RepertoireSummary,
 } from '../api/client.ts';
-import type { Color, DrillMode, DrillRules } from '@chess-prep/shared';
+import type { Color, DrillMode, DrillRules, LineScope } from '@chess-prep/shared';
 import {
   clearAllRepertoireDataLocal,
   deleteRepertoireLocal,
@@ -17,13 +17,19 @@ export type View =
   | { kind: 'browse' }
   | { kind: 'editor'; repertoireId: string }
   | { kind: 'drill-setup'; repertoireId: string }
-  | { kind: 'drill-session'; repertoireId: string; mode: DrillMode }
+  // Flow F1: `scope` is a SESSION-scoped override. It narrows this one session
+  // without touching the stored `drillRules.scope` (which stays the editor-level
+  // default) — so a one-night focus can't silently reshape the daily diet.
+  | { kind: 'drill-session'; repertoireId: string; mode: DrillMode; scope?: LineScope }
   // Phase 7: unified Build/Drill walker. `seed` decides which queue the walker
   // pulls from; the per-node UX is identical.
-  | { kind: 'walker-session'; repertoireId: string; seed: 'build' | 'drill' }
+  | { kind: 'walker-session'; repertoireId: string; seed: 'build' | 'drill'; scope?: LineScope }
   // Phase 8a: daily diet — mixed session across all repertoires for a side.
   | { kind: 'daily' }
-  | { kind: 'health-check'; repertoireId: string };
+  | { kind: 'health-check'; repertoireId: string }
+  // Flow F1: line navigator — pick which line to train/grow; each row starts a
+  // session-scoped walker session.
+  | { kind: 'lines'; repertoireId: string; intent: 'train' | 'grow' };
 
 interface AppStore {
   view: View;
