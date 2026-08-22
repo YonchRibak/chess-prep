@@ -38,7 +38,7 @@ colliding with parked Phases 10/11.
 |---|---|---|
 | **F1** ✅ | Session-scoped line scope (the stored scope demoted to default; daily-diet footgun killed) + line navigator (`#/lines/:id/train\|grow`) with per-line badges |
 | **F2** ✅ | Guided prepare: `#/prepare` wizard, `PrepTarget` presets, line-first traversal (`findNextBuildNodeLineFirst`), session-forced auto-expand, lock-in micro-rehearsal, structural coverage-to-target meter |
-| **F3** | Bundled explorer snapshot (frequency floor for the dev-401 machine / offline) + game-weighted coverage |
+| **F3** ✅ | Bundled explorer snapshot (`explorer_snapshot_entries` tier + generator/importer — the frequency floor for the dev-401 machine) + game-weighted coverage (`shared/coverage.ts`, meter upgrade). The snapshot JSONL itself still needs one `snapshot:build` run from a machine that can reach the explorer |
 | **F4** | Smart default Train queue + home re-org (Train / Prepare / Grow) + terminology pass |
 
 ## Known debt (deliberately deferred)

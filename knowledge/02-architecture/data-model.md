@@ -3,7 +3,8 @@
 Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
 `0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`,
-`0007_auto_expand`, `0008_drill_attempts`, `0009_refutations`.
+`0007_auto_expand`, `0008_drill_attempts`, `0009_refutations`,
+`0010_explorer_snapshot`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -81,6 +82,16 @@ truth — safe to truncate**, and every reader must work with it cold. `source` 
 dataset's filters (`lichess:blitz,rapid,classical:1600`) because the same position has
 different statistics per rating band and time control. Full rationale in
 [explorer](../03-domain/explorer.md).
+
+### `explorer_snapshot_entries`
+Flow F3: the **bundled explorer snapshot** — vendored frequency data for the common
+opening positions, imported like the ECO book (drop-and-reload,
+`db:import-explorer-snapshot`). Same shape as the cache but `generated_at` instead of
+`fetched_at` (staleness is a property of the whole dataset), unique on `fen_key`.
+**Deliberately a separate table:** `explorer_entries` is truncatable and the snapshot
+must survive truncation — it is data, not cache. Serves as the lowest tier before
+`null` in the explorer service. See
+[explorer](../03-domain/explorer.md#the-bundled-snapshot-flow-f3).
 
 ### `drill_attempts`
 Phase 9d append-only log of drill answers: `user_id`, `move_id`, `repertoire_id`,

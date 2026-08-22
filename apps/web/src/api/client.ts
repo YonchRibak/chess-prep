@@ -326,7 +326,13 @@ export const api = {
   getExplorerEntry(
     fenKey: string,
     opts: { cachedOnly?: boolean } = {},
-  ): Promise<{ entry: ExplorerEntry | null; source: string; backoffMs: number }> {
+  ): Promise<{
+    entry: ExplorerEntry | null;
+    source: string;
+    /** Flow F3: which layer answered — 'snapshot' means bundled, dated data. */
+    tier?: 'fresh-cache' | 'live' | 'stale-cache' | 'snapshot' | 'none';
+    backoffMs: number;
+  }> {
     const qs = opts.cachedOnly ? '?cachedOnly=1' : '';
     return request(`/explorer/${encodeURIComponent(fenKey)}${qs}`);
   },

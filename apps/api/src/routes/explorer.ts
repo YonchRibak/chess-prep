@@ -3,7 +3,7 @@ import { HttpError } from '../services/repertoires.js';
 import {
   EXPLORER_SOURCE,
   explorerBackoffRemainingMs,
-  getExplorerEntry,
+  getExplorerEntryWithTier,
   validateExplorerFenKey,
 } from '../services/explorer.js';
 
@@ -21,10 +21,13 @@ explorerRoutes.get('/:fenKey', async (c) => {
   try {
     const fenKey = validateExplorerFenKey(c.req.param('fenKey'));
     const cachedOnly = c.req.query('cachedOnly') === '1';
-    const entry = await getExplorerEntry(fenKey, { cachedOnly });
+    // Flow F3: `tier` says which layer answered ('snapshot' lets the UI label
+    // staleness); the entry's own `source` carries the snapshot's date stamp.
+    const { entry, tier } = await getExplorerEntryWithTier(fenKey, { cachedOnly });
     return c.json({
       entry,
       source: EXPLORER_SOURCE,
+      tier,
       backoffMs: explorerBackoffRemainingMs(),
     });
   } catch (e) {

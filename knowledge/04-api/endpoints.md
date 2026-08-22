@@ -73,7 +73,7 @@ malformed one; the rest of the rules body stays opaque jsonb.
 
 | Endpoint | Notes |
 |---|---|
-| `GET /explorer/:fenKey` | → `{ entry, source, backoffMs }`. `?cachedOnly=1` skips the network entirely |
+| `GET /explorer/:fenKey` | → `{ entry, source, tier, backoffMs }`. `?cachedOnly=1` skips the network entirely. Flow F3: `tier ∈ fresh-cache \| live \| stale-cache \| snapshot \| none` says which layer answered — `snapshot` is bundled, dated data (the entry's own `source` carries the date stamp) |
 
 **A cold miss with no network is `200` with `entry: null`, not an error.** Callers fall
 back to book continuations; a 5xx would turn a degraded-but-fine state into a broken build

@@ -12,19 +12,21 @@
  * front of it on this dev machine regardless of headers, while `lichess.org`
  * itself is reachable. See dev-setup.md.
  */
-import { EXPLORER_SOURCE, getExplorerEntry } from '../services/explorer.js';
+import { EXPLORER_SOURCE, getExplorerEntryWithTier } from '../services/explorer.js';
 
 const START_KEY = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
 
 const fenKey = process.argv[2] ?? START_KEY;
 
-getExplorerEntry(fenKey)
-  .then((entry) => {
+getExplorerEntryWithTier(fenKey)
+  .then(({ entry, tier }) => {
     console.log(`source: ${EXPLORER_SOURCE}`);
+    console.log(`tier: ${tier}`); // Flow F3: which layer answered (incl. 'snapshot')
     if (!entry) {
-      console.log('NULL — nothing cached and the fetch did not succeed.');
+      console.log('NULL — nothing cached, no snapshot row, and the fetch did not succeed.');
       process.exit(0);
     }
+    console.log(`entry source: ${entry.source}`);
     console.log(`fetchedAt: ${entry.fetchedAt}`);
     console.log(`total games: ${entry.total}`);
     for (const m of entry.moves.slice(0, 6)) {

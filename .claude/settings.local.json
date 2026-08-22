@@ -9,7 +9,11 @@
       "PowerShell(\\(Get-Content apps\\\\web\\\\src\\\\lib\\\\walker\\\\walker.test.ts | Measure-Object -Line\\).Lines; Get-Content apps\\\\web\\\\src\\\\lib\\\\walker\\\\walker.test.ts -Tail 10)",
       "PowerShell(pnpm --filter @chess-prep/web test 2>&1)",
       "PowerShell(pnpm --filter @chess-prep/shared test 2>&1)",
-      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f2.txt\")"
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f2.txt\")",
+      "PowerShell(git checkout -b feat/flow-f3-explorer-snapshot)",
+      "Read(//c/code/chess-prep/apps/api/drizzle/**)",
+      "PowerShell(pnpm --filter @chess-prep/api db:generate --name explorer_snapshot 2>&1)",
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f3.txt\" 2>&1)"
     ]
   }
 }

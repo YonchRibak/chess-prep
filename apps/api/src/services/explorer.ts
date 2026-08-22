@@ -23,7 +23,7 @@ import {
   type ExplorerMoveStat,
 } from '@chess-prep/shared';
 import { db } from '../db/client.js';
-import { explorerEntries } from '../db/schema.js';
+import { explorerEntries, explorerSnapshotEntries } from '../db/schema.js';
 import { HttpError } from './repertoires.js';
 
 /**
@@ -66,28 +66,79 @@ export interface GetExplorerOptions {
   cachedOnly?: boolean;
 }
 
+/** Which layer answered — surfaced by the route and `probe:explorer`. */
+export type ExplorerTier = 'fresh-cache' | 'live' | 'stale-cache' | 'snapshot' | 'none';
+
 /**
- * The explorer record for a position: cached if fresh, otherwise refetched,
- * falling back to the stale row (then to `null`) when the network says no.
+ * The explorer record for a position, with which tier produced it.
+ *
+ * Tier order (Flow F3): fresh cache → live fetch → stale cache → **bundled
+ * snapshot** → `null`. The snapshot is real frequency data, merely old — so
+ * every consumer that requires "explorer-sourced" evidence (auto-expansion's
+ * write rule included) is satisfied, not weakened, by a snapshot answer. The
+ * never-throws contract is unchanged.
  */
-export async function getExplorerEntry(
+export async function getExplorerEntryWithTier(
   fenKeyStr: string,
   options: GetExplorerOptions = {},
-): Promise<ExplorerEntry | null> {
+): Promise<{ entry: ExplorerEntry | null; tier: ExplorerTier }> {
   const { maxAgeMs = DEFAULT_MAX_AGE_MS, cachedOnly = false } = options;
 
   const cached = await readCached(fenKeyStr);
   if (cached) {
     const age = Date.now() - new Date(cached.fetchedAt).getTime();
-    if (age < maxAgeMs) return cached;
+    if (age < maxAgeMs) return { entry: cached, tier: 'fresh-cache' };
   }
-  if (cachedOnly || explorerBackoffRemainingMs() > 0) return cached;
+  if (cachedOnly || explorerBackoffRemainingMs() > 0) {
+    return withSnapshotFallback(fenKeyStr, cached);
+  }
 
   const fetched = await fetchFromLichess(fenKeyStr);
-  if (!fetched) return cached; // offline / rate-limited / malformed — stale is fine.
+  if (!fetched) {
+    // Offline / rate-limited / malformed — a stale row beats the snapshot
+    // (it is newer), and the snapshot beats nothing.
+    return withSnapshotFallback(fenKeyStr, cached);
+  }
 
   await upsert(fetched);
-  return fetched;
+  return { entry: fetched, tier: 'live' };
+}
+
+/** Back-compat shape: just the entry. */
+export async function getExplorerEntry(
+  fenKeyStr: string,
+  options: GetExplorerOptions = {},
+): Promise<ExplorerEntry | null> {
+  return (await getExplorerEntryWithTier(fenKeyStr, options)).entry;
+}
+
+async function withSnapshotFallback(
+  fenKeyStr: string,
+  cached: ExplorerEntry | null,
+): Promise<{ entry: ExplorerEntry | null; tier: ExplorerTier }> {
+  if (cached) return { entry: cached, tier: 'stale-cache' };
+  const snap = await readSnapshot(fenKeyStr);
+  if (snap) return { entry: snap, tier: 'snapshot' };
+  return { entry: null, tier: 'none' };
+}
+
+/**
+ * Flow F3: the bundled snapshot row, shaped as a normal `ExplorerEntry`.
+ * Consumers don't care which tier produced an entry; `source` carries the
+ * snapshot marker + date so a UI can label staleness ("stats as of 2026-08").
+ */
+async function readSnapshot(fenKeyStr: string): Promise<ExplorerEntry | null> {
+  const row = await db.query.explorerSnapshotEntries.findFirst({
+    where: eq(explorerSnapshotEntries.fenKey, fenKeyStr),
+  });
+  if (!row) return null;
+  return {
+    fenKey: row.fenKey,
+    source: row.source,
+    total: row.total,
+    moves: (row.moves ?? []) as ExplorerMoveStat[],
+    fetchedAt: row.generatedAt.toISOString(),
+  };
 }
 
 async function readCached(fenKeyStr: string): Promise<ExplorerEntry | null> {

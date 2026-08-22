@@ -55,6 +55,7 @@ import {
   type CandidateSource,
 } from '../lib/openings/candidates.ts';
 import { selectAutoExpandSans } from '../lib/walker/autoExpand.ts';
+import { computeGuidedGameCoverage } from '../lib/walker/gameCoverage.ts';
 import { warmFrontier } from '../lib/openings/prefetch.ts';
 import { gradeAndQueue, logAttempt, pullSince } from '../lib/srs/sync.ts';
 import { emptyCardFor } from '../lib/srs/scheduler.ts';
@@ -250,6 +251,34 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
         : null,
     [guided, active, indices, meterScope, prepTarget.maxDepthPlies],
   );
+
+  // Flow F3.2: upgrade the meter to share-of-games when explorer entries are
+  // warm; null (cold / untrustworthy) keeps the structural display.
+  const [gameCoverage, setGameCoverage] = useState<{ pct: number } | null>(null);
+  useEffect(() => {
+    if (!guided || !active || !indices || !meterScope) {
+      setGameCoverage(null);
+      return;
+    }
+    let cancelled = false;
+    void computeGuidedGameCoverage({
+      rep: active,
+      indices,
+      ...meterScope,
+      maxDepthPlies: prepTarget.maxDepthPlies,
+    }).then((cov) => {
+      if (cancelled) return;
+      if (!cov) {
+        setGameCoverage(null);
+        return;
+      }
+      const known = cov.coveredShare + cov.uncoveredShare;
+      setGameCoverage(known > 0 ? { pct: Math.round((cov.coveredShare / known) * 100) } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [guided, active, indices, meterScope, prepTarget.maxDepthPlies]);
 
   /* ---------------- board loading: always replay from the root ---------------- */
 
@@ -1201,10 +1230,17 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
           {scopedCoverage ? (
             <span
               className="text-[10px] text-emerald-300 font-mono"
-              title="Prepared positions vs. remaining prompts, within this session's line and depth target"
+              title={
+                gameCoverage
+                  ? "Share of opponents' games your prep covers, within this session's line and depth target"
+                  : "Prepared positions vs. remaining prompts, within this session's line and depth target"
+              }
             >
-              {scopedCoverage.covered}/{scopedCoverage.covered + scopedCoverage.toBuild} covered
-              · {scopedCoverage.toBuild} to target
+              {gameCoverage
+                ? `${gameCoverage.pct}% of games covered · ${scopedCoverage.toBuild} to target`
+                : `${scopedCoverage.covered}/${
+                    scopedCoverage.covered + scopedCoverage.toBuild
+                  } covered · ${scopedCoverage.toBuild} to target`}
             </span>
           ) : (
             coverage && (

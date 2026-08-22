@@ -1,5 +1,6 @@
 export * from './attempts.js';
 export * from './auth.js';
+export * from './coverage.js';
 export * from './drill.js';
 export * from './explorer.js';
 export * from './fen.js';

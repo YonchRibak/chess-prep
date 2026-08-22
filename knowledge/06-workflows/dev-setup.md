@@ -11,6 +11,7 @@ pnpm db:up                                          # Postgres 16 on :5432
 cp apps/api/.env.example apps/api/.env              # then check DATABASE_URL
 pnpm db:migrate                                     # applies drizzle/ + seeds the default user
 pnpm --filter @chess-prep/api db:import-openings    # loads the ECO book (~3,733 rows)
+pnpm --filter @chess-prep/api db:import-explorer-snapshot  # F3: loads the bundled frequency snapshot (if vendored)
 pnpm dev                                            # web :5173 + api :8787
 ```
 
@@ -40,11 +41,14 @@ $env:NODE_EXTRA_CA_CERTS = "C:\code\chess-prep\.corp-ca.pem" # PowerShell
 
 `explorer.lichess.ovh` returns **401 from an nginx** on this machine for every request,
 regardless of headers, while `lichess.org` itself answers normally — so the explorer cache
-never fills here. That is a *supported* degraded state (candidate selection falls back to
-the ECO book), but it is worth knowing before debugging empty candidate lists.
+never fills here. Since Flow F3 the **bundled snapshot** mitigates this: import it and the
+snapshot tier answers for the common opening positions
+([explorer](../03-domain/explorer.md#the-bundled-snapshot-flow-f3)). Generating a fresh
+snapshot (`pnpm --filter @chess-prep/api snapshot:build`) must happen on a machine where
+the host answers — not this one.
 
 ```bash
-pnpm --filter @chess-prep/api probe:explorer     # prints the entry, or NULL
+pnpm --filter @chess-prep/api probe:explorer     # prints the entry + which tier answered, or NULL
 ```
 
 The service never throws and logs only a warning, so the probe is how you tell "no data"

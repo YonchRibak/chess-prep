@@ -16,6 +16,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [refutation.test.ts](../../packages/shared/src/refutation.test.ts) | Phase 9d: PV→SAN conversion for shadow lines — the ply cap, and that a **stale** PV truncates at the first unplayable move instead of throwing (a partial refutation is still worth storing; an exception would lose the whole thing) |
 | [scope.test.ts](../../packages/shared/src/scope.test.ts) | Phase 9a: opening-name boundary matching, tag matching, tag inheritance (replace vs inherit vs clear), `parseLineScope` validation, and that a malformed scope degrades to "no filter" rather than "no cards" |
 | [prep.test.ts](../../packages/shared/src/prep.test.ts) | Flow F2: `parsePrepTarget` validation; that the *default* preset equals the reply policy's own `minShare` (so "Standard" can't silently diverge from un-guided building); color inference from the book's movetext |
+| [coverage.test.ts](../../packages/shared/src/coverage.test.ts) | Flow F3.2: game-weighted coverage — mass weighted by reply shares, depth-cap mass counts as covered, the truncated rare-move tail counts as uncovered, and cold nodes park mass as *unknown* (with `gameWeightedCoverageUsable` refusing to display a guess) rather than inflating the percentage |
 
 ### apps/web — pure logic, no DOM
 | File | Guards |
@@ -41,6 +42,8 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [refutations.invariant.test.ts](../../apps/api/src/services/refutations.invariant.test.ts) | Phase 9d, the whole feature stated as what must **not** happen: no card for any ply of a shadow line, no claim on the one prep slot, omitted from PGN export, promotion to prep is one-way, idempotent re-save, and the ply cap is enforced |
 | [import-openings.parity.test.ts](../../apps/api/src/scripts/import-openings.parity.test.ts) | Importer rows match `fenKey()`-normalized lookups, byte for byte |
 | [explorer.test.ts](../../apps/api/src/services/explorer.test.ts) | Parsing third-party explorer JSON (malformed rows dropped, totals taken from the position rather than the truncated move list) and the fenKey guard. Pure — needs no DB despite living beside the integration tests |
+| [explorer.tier.test.ts](../../apps/api/src/services/explorer.tier.test.ts) | Flow F3 (integration): tier order — cold cache + no network falls through to the bundled **snapshot** (labeled as such) instead of `null`, and a cache row still beats the snapshot because it is newer |
+| [import-explorer-snapshot.test.ts](../../apps/api/src/scripts/import-explorer-snapshot.test.ts) | Flow F3: snapshot importer parsing — the fenKey parity guard (a row keyed off-normalization would silently never be hit), loud per-line rejection of malformed vendored data. Pure |
 
 ## Four tests that must not be weakened
 

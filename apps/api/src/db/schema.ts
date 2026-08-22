@@ -185,6 +185,32 @@ export const explorerEntries = pgTable(
 );
 
 /**
+ * Flow F3: the bundled explorer **snapshot** — precomputed frequency data for
+ * the common opening positions, imported from vendored JSONL like the ECO book.
+ *
+ * Deliberately NOT merged into `explorer_entries`: that table is a truncatable
+ * cache, and the snapshot must survive truncation — it is the frequency floor
+ * that keeps the guided flow ranked by real data when the live explorer is
+ * unreachable (offline, corporate proxy, the dev machine's 401 nginx).
+ *
+ * `generated_at` is when the snapshot was built, not when a row was fetched —
+ * staleness is a property of the whole dataset. Refreshed ~yearly like the
+ * book; opening statistics move over months.
+ */
+export const explorerSnapshotEntries = pgTable(
+  'explorer_snapshot_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fenKey: text('fen_key').notNull(),
+    source: text('source').notNull(),
+    total: integer('total').notNull().default(0),
+    moves: jsonb('moves').notNull().default(sql`'[]'::jsonb`),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [unique('uniq_snapshot_fen').on(t.fenKey)],
+);
+
+/**
  * Phase 9d: append-only log of drill answers. One row per answered card, never
  * updated — the value is entirely in the sequence, so an "upsert latest attempt"
  * shape would destroy the only thing the table is for.
@@ -247,4 +273,5 @@ export type DbSrsCard = typeof srsCards.$inferSelect;
 export type DbOpeningBookEntry = typeof openingBookEntries.$inferSelect;
 export type DbUserSettings = typeof userSettings.$inferSelect;
 export type DbExplorerEntry = typeof explorerEntries.$inferSelect;
+export type DbExplorerSnapshotEntry = typeof explorerSnapshotEntries.$inferSelect;
 export type DbDrillAttempt = typeof drillAttempts.$inferSelect;

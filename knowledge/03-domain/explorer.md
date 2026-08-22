@@ -14,7 +14,7 @@ The mistake this design exists to prevent is using one source for all three jobs
 | Source | Its one job | Offline |
 |---|---|---|
 | ECO book (`opening_book_entries`) | naming, and shallow breadth | yes — bundled |
-| **Explorer** (`explorer_entries`) | *which opponent replies matter* — frequency and W/D/L | only from cache |
+| **Explorer** (`explorer_entries` + `explorer_snapshot_entries`) | *which opponent replies matter* — frequency and W/D/L | cache, and (F3) the bundled snapshot |
 | Stockfish | *which move the user should play* | yes |
 
 The book cannot rank opponent replies: it has no frequency data and dries up around ply
@@ -54,6 +54,42 @@ Third-party JSON is validated field by field (`parseExplorerResponse`), not type
 Totals come from the position's own `white/draws/black` rather than the sum of the
 returned moves, because lichess truncates the move list — summing it would inflate every
 share to fill a truncated 100%.
+
+## The bundled snapshot (Flow F3)
+
+Table `explorer_snapshot_entries` — same shape as the cache minus `fetched_at`
+semantics (`generated_at` describes the whole dataset). **Not merged into
+`explorer_entries` on purpose:** that table is a truncatable cache, and the snapshot
+must survive truncation. It is not a cache at all — it is vendored data, imported like
+the ECO book.
+
+The service answers in tier order — **fresh cache → live fetch → stale cache →
+snapshot → null** (`getExplorerEntryWithTier`; a stale cache row beats the snapshot
+because it is newer). The route and `probe:explorer` surface `tier`, and a snapshot
+entry's `source` carries its date stamp (`…:snapshot@2026-08-22`) so a UI can label
+staleness. The never-throws contract is unchanged, and consumers need zero changes:
+`selectOpponentReplies`, `rankUserCandidates`, auto-expansion, and the prefetcher all
+take an `ExplorerEntry` and don't care which tier produced it. The 9c rule "only
+explorer-sourced candidates authorize a write" is *satisfied*, not weakened — a
+snapshot is real frequency data, merely old, and opening statistics move over months.
+
+Workflow (see the data README in
+[apps/api/data/explorer-snapshot/](../../apps/api/data/explorer-snapshot/README.md)):
+`snapshot:build` runs a BFS from the start position (default 12 plies, 2% share
+floor) against the live explorer — run it **from a machine where the host answers**
+(the primary dev box can't; that's the point) — and vendors JSONL;
+`db:import-explorer-snapshot` drop-and-reloads the table, re-normalizing every fenKey
+through `fenKey()` (the same parity guard as the book importer). Regenerate ~yearly.
+
+**Game-weighted coverage (F3.2)** lives in
+[packages/shared/src/coverage.ts](../../packages/shared/src/coverage.ts):
+`computeGameWeightedCoverage` walks the (scoped) tree pushing probability mass through
+explorer shares — prepared replies keep flowing, unprepared ones are uncovered, mass at
+a cold node is *unknown* rather than guessed, and `gameWeightedCoverageUsable` gates
+display so the meter falls back to the structural count instead of showing a made-up
+percentage. The guided walker reads entries `cachedOnly` via
+[gameCoverage.ts](../../apps/web/src/lib/walker/gameCoverage.ts) — the meter must never
+trigger live lichess fetches.
 
 ## Selection policy
 
@@ -107,6 +143,11 @@ would have paid anyway.
 
 `explorer.lichess.ovh` answers **401 from an nginx** on the primary dev machine, for every
 request regardless of headers, while `lichess.org` itself responds normally — so the cache
-stays cold there. Diagnose with `pnpm --filter @chess-prep/api probe:explorer`, which
-prints the entry or `NULL`; the service's silence is deliberate, so the probe is how you
-tell "no data" from "broken". See [dev-setup](../06-workflows/dev-setup.md).
+stays cold there. **Since Flow F3 this is mitigated, not fixed:** once the snapshot is
+imported, the snapshot tier answers for the common opening positions, so guided building
+ranks replies by real frequency even with the live host unreachable; only positions
+outside the snapshot's depth/floor still fall back to the book. Diagnose with
+`pnpm --filter @chess-prep/api probe:explorer`, which now prints **which tier answered**
+(`live` / `fresh-cache` / `stale-cache` / `snapshot` / `none`); the service's silence is
+deliberate, so the probe is how you tell "no data" from "broken". See
+[dev-setup](../06-workflows/dev-setup.md).
