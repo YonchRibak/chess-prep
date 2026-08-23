@@ -11,6 +11,7 @@
     "./drill": "./src/drill.ts",
     "./fen": "./src/fen.ts",
     "./openings": "./src/openings.ts",
+    "./rashid": "./src/rashid.ts",
     "./types": "./src/types.ts",
     "./pgn": "./src/pgn.ts"
   },

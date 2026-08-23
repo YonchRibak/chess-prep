@@ -31,6 +31,13 @@ export interface AnalyzeOptions {
   depth?: number;
   /** Or run for this many milliseconds (use one or the other). */
   movetime?: number;
+  /**
+   * Or cap at a fixed node count (Rashid R0/R2, rashid-dev-plan.md §C2).
+   * Node-limited single-threaded searches are reproducible run-to-run, which
+   * depth-limited ones are not — that reproducibility is what makes Rashid
+   * results cacheable under a stable key.
+   */
+  nodes?: number;
   /** Number of lines to track simultaneously. Defaults to 1. */
   multipv?: number;
   /**
@@ -171,6 +178,8 @@ export class Engine {
     this.send(`position fen ${fen}`);
     if (opts.movetime != null) {
       this.send(`go movetime ${opts.movetime}`);
+    } else if (opts.nodes != null) {
+      this.send(`go nodes ${opts.nodes}`);
     } else {
       this.send(`go depth ${opts.depth ?? DEFAULT_DEPTH}`);
     }

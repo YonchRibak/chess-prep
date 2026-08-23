@@ -65,6 +65,19 @@ is weak rather than uniformly. Nothing is built for it; the log it would read
 not new plumbing. Design note in
 [repertoire-growth](../03-domain/repertoire-growth.md#mistake-rehearsal).
 
+## In progress — Rashid (trap-finding layer)
+
+An analysis layer that finds moves forcing the opponent onto a chain of "only moves"
+and scores them Risk/Reward/Length. Spec at [rashid-engine-spec.md](../../rashid-engine-spec.md),
+phased plan at [rashid-dev-plan.md](../../rashid-dev-plan.md), status detail in
+[rashid.md](../03-domain/rashid.md).
+
+| Phase | Status |
+|---|---|
+| **R1** ✅ | Domain core in `packages/shared/src/rashid.ts` — only-move detection, lazy walk, ranking — fully unit-tested against a scripted fake engine |
+| **R0** | `nodes` engine option landed; the wasm throughput **measurement** (which picks the search budgets and decides browser-vs-script precompute) is still to run |
+| **R2–R6** | Not started — adapter + raw cache, live probe, arrows, precompute, tuning |
+
 ## Parked
 
 ### Phase 10 — Opponent scouting ⏸

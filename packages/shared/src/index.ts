@@ -7,6 +7,7 @@ export * from './fen.js';
 export * from './openings.js';
 export * from './pgn.js';
 export * from './prep.js';
+export * from './rashid.js';
 export * from './refutation.js';
 export * from './scope.js';
 export * from './types.js';

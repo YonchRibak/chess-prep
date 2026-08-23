@@ -20,7 +20,10 @@ import.
 `__bootstrap__:`-prefixed messages and are collected so a timeout reports *why*. A
 failed `readyPromise` is reset to `null` so a retry is possible.
 
-`AnalyzeOptions`: `depth` (default 18) *or* `movetime`, plus `multipv` (default 1).
+`AnalyzeOptions`: `depth` (default 18) *or* `movetime` *or* `nodes`, plus `multipv`
+(default 1). `nodes` exists for [Rashid](rashid.md): node-limited single-threaded
+searches are reproducible run-to-run (depth-limited ones are not), which is what makes
+their results cacheable under a stable key. Precedence: `movetime` > `nodes` > `depth`.
 `parseInfo(line)` turns a UCI `info` line into an `EngineLine`; subscribe with
 `onProgress(fn)`.
 

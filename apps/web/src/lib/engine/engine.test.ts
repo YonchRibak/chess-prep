@@ -37,16 +37,40 @@ describe('parseInfo', () => {
   });
 });
 
-describe('Engine.setGated (Phase 8b)', () => {
-  // Stand-in for the worker: a `postMessage` recorder.
-  function workerStub(): { postMessage: ReturnType<typeof vi.fn>; messages: string[] } {
-    const messages: string[] = [];
-    const postMessage = vi.fn((m: string) => {
-      messages.push(m);
-    });
-    return { postMessage, messages };
-  }
+// Stand-in for the worker: a `postMessage` recorder.
+function workerStub(): { postMessage: ReturnType<typeof vi.fn>; messages: string[] } {
+  const messages: string[] = [];
+  const postMessage = vi.fn((m: string) => {
+    messages.push(m);
+  });
+  return { postMessage, messages };
+}
 
+/** Inject the stub worker directly — bypasses `init()` so no real worker is
+ * needed; the class only touches the worker via `send()`/`postMessage`. */
+function engineWithStub(): { engine: Engine; w: ReturnType<typeof workerStub> } {
+  const engine = new Engine();
+  const w = workerStub();
+  (engine as unknown as { worker: { postMessage: typeof w.postMessage } }).worker = {
+    postMessage: w.postMessage,
+  };
+  return { engine, w };
+}
+
+describe('Engine.analyze go-command selection', () => {
+  it('uses `go nodes` when a node budget is given (Rashid: reproducible searches)', () => {
+    const { engine, w } = engineWithStub();
+    engine.analyze('startpos', { nodes: 500000, multipv: 4 });
+    expect(w.messages).toContain('go nodes 500000');
+    expect(w.messages.some((m) => m.startsWith('go depth'))).toBe(false);
+    // movetime still wins when both are passed (documented precedence).
+    w.messages.length = 0;
+    engine.analyze('startpos', { movetime: 1000, nodes: 500000 });
+    expect(w.messages).toContain('go movetime 1000');
+  });
+});
+
+describe('Engine.setGated (Phase 8b)', () => {
   it('analyze() becomes a no-op when gated AND still sends `stop` to cancel anything in flight', () => {
     const engine = new Engine();
     const w = workerStub();

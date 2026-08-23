@@ -31,6 +31,7 @@ If a doc and the code disagree, the code wins — and the doc should be fixed.
 - [SRS & drilling](03-domain/srs-drilling.md) — FSRS, queues, drill modes, daily diet.
 - [Opening database](03-domain/opening-database.md) — ECO book, import, lookup, auto-naming.
 - [Engine & gating](03-domain/engine.md) — Stockfish worker, the hard no-leak guarantee.
+- [Rashid trap-finder](03-domain/rashid.md) — only-move tightropes scored Risk/Reward/Length; shared domain core built, everything else (adapter, cache, precompute, arrows) is not.
 - [Repertoire growth & line scopes](03-domain/repertoire-growth.md) — Phase 9, **all four sub-phases built** (line scopes, explorer cache, the growth loop, mistake rehearsal). Only weakness-steered growth remains design.
 - [Opening explorer](03-domain/explorer.md) — frequency/result statistics, the cache, the candidate-selection policy, and how the build prompt consumes them.
 

@@ -16,6 +16,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [refutation.test.ts](../../packages/shared/src/refutation.test.ts) | Phase 9d: PV→SAN conversion for shadow lines — the ply cap, and that a **stale** PV truncates at the first unplayable move instead of throwing (a partial refutation is still worth storing; an exception would lose the whole thing) |
 | [scope.test.ts](../../packages/shared/src/scope.test.ts) | Phase 9a: opening-name boundary matching, tag matching, tag inheritance (replace vs inherit vs clear), `parseLineScope` validation, and that a malformed scope degrades to "no filter" rather than "no cards" |
 | [prep.test.ts](../../packages/shared/src/prep.test.ts) | Flow F2: `parsePrepTarget` validation; that the *default* preset equals the reply policy's own `minShare` (so "Standard" can't silently diverge from un-guided building); color inference from the book's movetext |
+| [rashid.test.ts](../../packages/shared/src/rashid.test.ts) | Rashid R1 domain core against a scripted fake engine: only-move detection (gap in win-prob space, opponent-preference sort direction, mate sentinels), the walk's **laziness** via the fake's call log (no call past a failed check, none for a prefiltered root or a forced reply — engine calls are Rashid's entire cost), forced replies not counting as pinch points, repetition ending a cycling line as a draw, the sacrifice cap rejecting a too-expensive gambit *after* it passed the root prefilter, and reward floor/max ordering through mate sentinels |
 | [coverage.test.ts](../../packages/shared/src/coverage.test.ts) | Flow F3.2: game-weighted coverage — mass weighted by reply shares, depth-cap mass counts as covered, the truncated rare-move tail counts as uncovered, and cold nodes park mass as *unknown* (with `gameWeightedCoverageUsable` refusing to display a guess) rather than inflating the percentage |
 
 ### apps/web — pure logic, no DOM
@@ -29,7 +30,7 @@ Vitest everywhere. `pnpm test` runs all three packages; `apps/api` uses
 | [scheduler.test.ts](../../apps/web/src/lib/srs/scheduler.test.ts) | FSRS DTO ↔ card conversion and grading |
 | [router.test.ts](../../apps/web/src/lib/router.test.ts) | Flow F1: view ↔ hash round-trips for every view kind, including session scopes with spaces and interior colons; that a malformed `?scope=` param degrades to *absent* (stored rules apply) rather than nulling a valid route or inventing a scope. Flow F2: `guided=1` round-trips (alone and with a scope) and anything else parses un-guided |
 | [lineIndex.test.ts](../../apps/web/src/lib/lines/lineIndex.test.ts) | Flow F1 line navigator: name-hierarchy nesting, tag entries, dropped/refutation exclusion, misses-per-line — and the property the navigator exists to keep: each entry's `dueCount` **equals the length of the due queue its Start button launches** with the same scope |
-| [engine.test.ts](../../apps/web/src/lib/engine/engine.test.ts) | UCI parsing, and **`setGated`** |
+| [engine.test.ts](../../apps/web/src/lib/engine/engine.test.ts) | UCI parsing, **`setGated`**, and go-command selection (`nodes` budget for Rashid, `movetime` precedence) |
 | [arrows.test.ts](../../apps/web/src/lib/engine/arrows.test.ts) | Rank → brush/color mapping |
 | [useChessRules.test.ts](../../apps/web/src/lib/chess/useChessRules.test.ts) | Rules wrapper |
 
