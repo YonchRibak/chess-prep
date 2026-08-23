@@ -15,7 +15,24 @@
       "PowerShell(pnpm --filter @chess-prep/api db:generate --name explorer_snapshot 2>&1)",
       "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f3.txt\" 2>&1)",
       "PowerShell(git checkout -b feat/flow-f4-smart-train)",
-      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f4.txt\" 2>&1)"
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-f4.txt\" 2>&1)",
+      "PowerShell(curl.exe -sS -o NUL -w \"HTTP %{http_code} via %{remote_ip}`n\" \"https://explorer.lichess.ovh/lichess?variant=standard&fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%20w%20KQkq%20-%200%201\" --max-time 15)",
+      "PowerShell(curl.exe -sS -o NUL -w \"HTTP %{http_code} via %{remote_ip}`n\" \"https://lichess.org/api/status\" --max-time 15)",
+      "PowerShell(curl.exe -4 -sS -o NUL -w \"IPv4: HTTP %{http_code} via %{remote_ip}`n\" \"https://explorer.lichess.ovh/lichess?variant=standard&fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%20w%20KQkq%20-%200%201\" --max-time 15)",
+      "PowerShell(curl.exe -6 -sS -o NUL -w \"IPv6: HTTP %{http_code} via %{remote_ip}`n\" \"https://explorer.lichess.ovh/lichess?variant=standard&fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%20w%20KQkq%20-%200%201\" --max-time 15)",
+      "PowerShell(curl.exe -sS \"https://api.ipify.org\")",
+      "PowerShell(curl.exe -sS -i \"https://explorer.lichess.ovh/lichess?variant=standard&fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%20w%20KQkq%20-%200%201\" --max-time 15)",
+      "WebFetch(domain:lichess.org)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(curl.exe -sS -o NUL -w \"explorer.lichess.org: HTTP %{http_code} via %{remote_ip}`n\" \"https://explorer.lichess.org/lichess?variant=standard&fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%20w%20KQkq%20-%200%201&speeds=blitz,rapid,classical&ratings=1600&moves=12&topGames=0&recentGames=0\" --max-time 15)",
+      "PowerShell(curl.exe -sS -o NUL -w \"origin lichess.org:   %{http_code}`n\" -H \"Origin: https://lichess.org\" $u --max-time 15)",
+      "PowerShell(curl.exe -sS -o NUL -w \"browser UA:          %{http_code}`n\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36\" $u --max-time 15)",
+      "PowerShell(curl.exe -sS -o NUL -w \"UA+Origin+Referer:   %{http_code}`n\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36\" -H \"Origin: https://lichess.org\" -H \"Referer: https://lichess.org/analysis\" $u --max-time 15)",
+      "PowerShell(curl.exe -sS -o NUL -w \"empty bearer:        %{http_code}`n\" -H \"Authorization: Bearer x\" $u --max-time 15)",
+      "PowerShell(git add apps/api/src/env.ts apps/api/.env.example apps/api/src/services/explorer.ts apps/api/src/scripts/build-explorer-snapshot.ts knowledge/03-domain/explorer.md knowledge/06-workflows/dev-setup.md FLOW_NEXT_STEPS.md)",
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-token.txt\" 2>&1)",
+      "PowerShell(git add apps/api/src/scripts/build-explorer-snapshot.ts apps/api/data/explorer-snapshot/README.md knowledge/03-domain/explorer.md FLOW_NEXT_STEPS.md)",
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\a4467f4b-c28d-478f-8800-24e103a36f38\\\\scratchpad\\\\commitmsg-gen.txt\" 2>&1)"
     ]
   }
 }

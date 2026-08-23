@@ -1,0 +1,10 @@
+{
+  "generatedAt": "2026-08-23T16:27:58.388Z",
+  "source": "lichess:blitz,rapid,classical:1600:snapshot@2026-08-23",
+  "depthPlies": 12,
+  "minShare": 0.02,
+  "minGames": 1000,
+  "maxPositions": 5000,
+  "positions": 2000,
+  "complete": false
+}
