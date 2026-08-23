@@ -75,11 +75,15 @@ snapshot is real frequency data, merely old, and opening statistics move over mo
 
 Workflow (see the data README in
 [apps/api/data/explorer-snapshot/](../../apps/api/data/explorer-snapshot/README.md)):
-`snapshot:build` runs a BFS from the start position (default 12 plies, 2% share
-floor) against the live explorer — run it **from a machine where the host answers**
-(the primary dev box can't; that's the point) — and vendors JSONL;
-`db:import-explorer-snapshot` drop-and-reloads the table, re-normalizing every fenKey
-through `fenKey()` (the same parity guard as the book importer). Regenerate ~yearly.
+`snapshot:build` crawls from the start position **best-first by game count under a
+hard position cap** (default 5,000 positions, within 12 plies, share ≥2%, ≥1,000
+games per branch). The cap is the convergence guarantee — a relative share floor
+alone multiplies the frontier ~5× per ply and never terminates — and best-first
+means the cap keeps exactly the most-played positions. Output is appended
+incrementally, so an interrupted run is still an importable (smaller) snapshot.
+Requires `LICHESS_TOKEN`; then `db:import-explorer-snapshot` drop-and-reloads the
+table, re-normalizing every fenKey through `fenKey()` (the same parity guard as the
+book importer). Regenerate ~yearly.
 
 **Game-weighted coverage (F3.2)** lives in
 [packages/shared/src/coverage.ts](../../packages/shared/src/coverage.ts):

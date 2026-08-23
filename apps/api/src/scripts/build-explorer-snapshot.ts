@@ -9,17 +9,26 @@
  * and imported with `db:import-explorer-snapshot`. Regenerate ~yearly; opening
  * statistics move over months, not minutes.
  *
- *   pnpm --filter @chess-prep/api snapshot:build [-- --depth 12 --min-share 0.02]
+ *   pnpm --filter @chess-prep/api snapshot:build \
+ *     [-- --depth 12 --min-share 0.02 --min-games 1000 --max-positions 5000]
  *
- * Expansion rule: from the starting position, descend into any move played in
- * at least `--min-share` of that position's games, to `--depth` plies. Tune
- * the numbers from the actual output size before vendoring — they are a
- * starting point, not a contract.
+ * Expansion is **best-first by game count with a hard position cap**, not
+ * plain BFS. A relative share floor alone never converges: a rare position's
+ * own top replies are still above 2% *of that position*, so the frontier
+ * multiplies by ~5 every ply and depth 12 becomes weeks of crawling. Popping
+ * the most-played frontier position next means `--max-positions` yields
+ * exactly the N most popular positions — a predictable size AND the best N
+ * for a frequency floor. `--min-games` (absolute) additionally refuses to
+ * descend into moves with too few games to ever matter.
+ *
+ * Output is APPENDED line by line as it goes and `meta.json` is refreshed
+ * periodically, so an interrupted run (Ctrl+C, network death) still leaves an
+ * importable snapshot — just a smaller one.
  *
  * Rate-limit manners mirror the cache service: one request at a time, a
  * polite delay between requests, and a 429 pauses everything for 60s.
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Chess } from 'chess.js';
@@ -43,6 +52,10 @@ const FETCH_TIMEOUT_MS = 10_000;
 interface Args {
   depth: number;
   minShare: number;
+  /** Never descend into a move with fewer than this many games. */
+  minGames: number;
+  /** Hard cap on fetched positions — the crawl's real size knob. */
+  maxPositions: number;
 }
 
 function parseArgs(): Args {
@@ -54,6 +67,8 @@ function parseArgs(): Args {
   return {
     depth: Number(get('--depth') ?? 12),
     minShare: Number(get('--min-share') ?? 0.02),
+    minGames: Number(get('--min-games') ?? 1000),
+    maxPositions: Number(get('--max-positions') ?? 5000),
   };
 }
 
@@ -101,37 +116,92 @@ async function fetchEntry(fenKeyStr: string) {
 }
 
 async function main() {
-  const { depth, minShare } = parseArgs();
+  const { depth, minShare, minGames, maxPositions } = parseArgs();
   const generatedAt = new Date().toISOString();
   const source = `lichess:${SPEEDS.join(',')}:${MIN_RATING}:snapshot@${generatedAt.slice(0, 10)}`;
 
-  console.log(`Building snapshot: depth ${depth} plies, floor ${minShare * 100}% — ${source}`);
+  console.log(
+    `Building snapshot: ≤${maxPositions} positions, depth ${depth} plies, ` +
+      `share ≥${minShare * 100}%, games ≥${minGames} — ${source}`,
+  );
+  console.log(`ETA at ~${REQUEST_GAP_MS}ms/request: ~${Math.round((maxPositions * (REQUEST_GAP_MS + 300)) / 60000)} min if the cap is reached. Ctrl+C keeps what's fetched.`);
 
-  // BFS over (fullFen, ply). Keyed by fenKey so transpositions fetch once.
-  type Step = { fullFen: string; ply: number };
-  const queue: Step[] = [{ fullFen: STARTING_FEN, ply: 0 }];
+  await mkdir(OUT_DIR, { recursive: true });
+  const linesPath = resolve(OUT_DIR, 'snapshot.jsonl');
+  const metaPath = resolve(OUT_DIR, 'meta.json');
+  await writeFile(linesPath, '', 'utf8'); // fresh run — truncate
+
+  let written = 0;
+  let complete = false;
+  const writeMeta = () =>
+    writeFile(
+      metaPath,
+      JSON.stringify(
+        {
+          generatedAt,
+          source,
+          depthPlies: depth,
+          minShare,
+          minGames,
+          maxPositions,
+          positions: written,
+          complete,
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf8',
+    );
+
+  // Graceful interrupt: finish the in-flight fetch, keep everything written.
+  let interrupted = false;
+  process.on('SIGINT', () => {
+    if (interrupted) process.exit(130); // second Ctrl+C: hard exit
+    interrupted = true;
+    console.log('\nInterrupt — finishing the current position, then writing meta.json…');
+  });
+
+  // Best-first frontier: always expand the most-played position next, so the
+  // position cap keeps exactly the N most popular positions. `games` is the
+  // play count of the move that reached the position (known from the parent's
+  // stats before fetching the child).
+  type Step = { fullFen: string; ply: number; games: number };
+  const frontier: Step[] = [
+    { fullFen: STARTING_FEN, ply: 0, games: Number.POSITIVE_INFINITY },
+  ];
   const seen = new Set<string>();
-  const lines: string[] = [];
 
-  while (queue.length > 0) {
-    const { fullFen, ply } = queue.shift()!;
+  while (frontier.length > 0 && written < maxPositions && !interrupted) {
+    let best = 0;
+    for (let i = 1; i < frontier.length; i++) {
+      if (frontier[i]!.games > frontier[best]!.games) best = i;
+    }
+    const { fullFen, ply, games } = frontier.splice(best, 1)[0]!;
     const key = makeFenKey(fullFen);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) continue; // transposition — already fetched
     seen.add(key);
 
     const entry = await fetchEntry(key);
     await sleep(REQUEST_GAP_MS);
     if (!entry || entry.total === 0) continue;
 
-    lines.push(
-      JSON.stringify({ fenKey: key, total: entry.total, moves: entry.moves }),
+    await appendFile(
+      linesPath,
+      JSON.stringify({ fenKey: key, total: entry.total, moves: entry.moves }) + '\n',
+      'utf8',
     );
-    if (lines.length % 50 === 0) {
-      console.log(`  ${lines.length} positions (queue ${queue.length}, ply ${ply})`);
+    written++;
+    if (written % 50 === 0) {
+      console.log(
+        `  ${written}/${maxPositions} positions (frontier ${frontier.length}, ply ${ply}, ~${fmtGames(games)} games)`,
+      );
+      if (written % 200 === 0) await writeMeta();
     }
 
     if (ply >= depth) continue;
     for (const m of entry.moves) {
+      const count = m.white + m.draws + m.black;
+      if (count < minGames) continue;
       if (moveShare(m, entry.total) < minShare) continue;
       const chess = new Chess(fullFen);
       try {
@@ -143,18 +213,20 @@ async function main() {
       } catch {
         continue; // malformed uci from upstream — skip the branch, keep the row
       }
-      queue.push({ fullFen: chess.fen(), ply: ply + 1 });
+      frontier.push({ fullFen: chess.fen(), ply: ply + 1, games: count });
     }
   }
 
-  await mkdir(OUT_DIR, { recursive: true });
-  await writeFile(resolve(OUT_DIR, 'snapshot.jsonl'), lines.join('\n') + '\n', 'utf8');
-  await writeFile(
-    resolve(OUT_DIR, 'meta.json'),
-    JSON.stringify({ generatedAt, source, depthPlies: depth, minShare, positions: lines.length }, null, 2) + '\n',
-    'utf8',
+  complete = !interrupted && (frontier.length === 0 || written >= maxPositions);
+  await writeMeta();
+  console.log(
+    `${interrupted ? 'Interrupted — wrote' : 'Wrote'} ${written} positions to ${OUT_DIR}`,
   );
-  console.log(`Wrote ${lines.length} positions to ${OUT_DIR}`);
+}
+
+function fmtGames(n: number): string {
+  if (!Number.isFinite(n)) return 'all';
+  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
 }
 
 main().catch((err) => {

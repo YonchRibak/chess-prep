@@ -69,14 +69,23 @@ With `LICHESS_TOKEN` in `apps/api/.env`, run it right here:
 pnpm --filter @chess-prep/api snapshot:build
 ```
 
-Defaults: 12 plies deep, 2% share floor. It's deliberately polite — one
-request at a time, ~0.8 s apart, 60 s backoff on any 429 — so expect roughly
-**30–60 minutes** for a few thousand positions. It logs progress every 50
-positions; data usage is a few MB of JSON.
+Defaults: **cap of 5,000 positions**, best-first by game count (most-played
+positions crawled first), within 12 plies, share ≥2%, and an absolute floor of
+≥1,000 games per branch. The cap is the real size knob — a relative share
+floor alone never converges, because a rare position's own top replies are
+still above 2% *of that position*.
 
-Check the output: `apps/api/data/explorer-snapshot/meta.json` shows the
-position count. Too big or too thin? Re-run with `-- --depth 10` or
-`-- --min-share 0.05` — the numbers are tunable by design, not a contract.
+It's deliberately polite — one request at a time, ~0.8 s apart, 60 s backoff
+on any 429 — so the default cap takes roughly **1½ hours**. Progress logs
+every 50 positions. Output is **appended as it goes** and `meta.json` is
+refreshed periodically, so **Ctrl+C keeps everything fetched so far** as a
+valid, importable (smaller) snapshot; because the crawl is best-first, an
+interrupted run still contains the *most popular* positions, which are the
+ones that matter.
+
+Want it shorter? `-- --max-positions 2000` (~30 min) is already a solid
+floor. Check `apps/api/data/explorer-snapshot/meta.json` for the final count
+and whether the run was `complete`.
 
 (If you ever need to run it on another machine instead: the script imports the
 API's env module, which demands a `DATABASE_URL` even though the generator

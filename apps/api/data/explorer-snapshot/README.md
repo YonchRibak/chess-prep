@@ -10,12 +10,16 @@ CC0); this mirrors the precedent of the vendored ECO TSVs in
 - `snapshot.jsonl` — one JSON object per position: `{ fenKey, total, moves }`.
 - `meta.json` — `generatedAt`, `source`, the depth/floor used, row count.
 
-Generate on a machine where the explorer host answers (the primary dev box
-cannot — that's the point of the snapshot):
+Generate (requires `LICHESS_TOKEN` in `apps/api/.env` — the explorer host
+401s anonymous requests):
 
 ```
-pnpm --filter @chess-prep/api snapshot:build -- --depth 12 --min-share 0.02
+pnpm --filter @chess-prep/api snapshot:build -- --max-positions 5000 --depth 12 --min-share 0.02 --min-games 1000
 ```
+
+Best-first by game count under the position cap, appended incrementally — an
+interrupted run is still an importable (smaller) snapshot of the most-played
+positions. `meta.json` records the parameters and whether the run completed.
 
 Import (drop-and-reload of `explorer_snapshot_entries`):
 
