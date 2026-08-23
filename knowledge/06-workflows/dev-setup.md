@@ -39,13 +39,19 @@ $env:NODE_EXTRA_CA_CERTS = "C:\code\chess-prep\.corp-ca.pem" # PowerShell
 
 ## Opening explorer reachability (Phase 9b)
 
-`explorer.lichess.ovh` returns **401 from an nginx** on this machine for every request,
-regardless of headers, while `lichess.org` itself answers normally — so the explorer cache
-never fills here. Since Flow F3 the **bundled snapshot** mitigates this: import it and the
-snapshot tier answers for the common opening positions
-([explorer](../03-domain/explorer.md#the-bundled-snapshot-flow-f3)). Generating a fresh
-snapshot (`pnpm --filter @chess-prep/api snapshot:build`) must happen on a machine where
-the host answers — not this one.
+The lichess opening-explorer host answers **401 to anonymous requests** — from every
+network, not just this machine (diagnosed 2026-08; see
+[explorer](../03-domain/explorer.md#the-401-properly-diagnosed-2026-08)). Fix: create a
+**personal access token** (no scopes) at <https://lichess.org/account/oauth/token> and
+set it in `apps/api/.env`:
+
+```
+LICHESS_TOKEN=lip_xxxxxxxxxxxxxxxx
+```
+
+Both the cache service and `snapshot:build` attach it automatically. Without it, the
+explorer tiers degrade to cache → **bundled snapshot** → book
+([explorer](../03-domain/explorer.md#the-bundled-snapshot-flow-f3)).
 
 ```bash
 pnpm --filter @chess-prep/api probe:explorer     # prints the entry + which tier answered, or NULL

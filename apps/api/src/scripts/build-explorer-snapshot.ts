@@ -24,6 +24,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Chess } from 'chess.js';
 import { fenKey as makeFenKey, moveShare, STARTING_FEN } from '@chess-prep/shared';
+import { env } from '../env.js';
 import { parseExplorerResponse } from '../services/explorer.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -33,7 +34,7 @@ const OUT_DIR = resolve(HERE, '..', '..', 'data', 'explorer-snapshot');
 // band would silently disagree with live rows for the same position.
 const SPEEDS = ['blitz', 'rapid', 'classical'] as const;
 const MIN_RATING = 1600;
-const EXPLORER_URL = 'https://explorer.lichess.ovh/lichess';
+const EXPLORER_URL = 'https://explorer.lichess.org/lichess';
 const USER_AGENT = 'chess-prep/0.1 (personal opening-prep tool; snapshot build)';
 const REQUEST_GAP_MS = 800;
 const BACKOFF_MS = 60_000;
@@ -73,7 +74,11 @@ async function fetchEntry(fenKeyStr: string) {
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
       const res = await fetch(`${EXPLORER_URL}?${params}`, {
-        headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': USER_AGENT,
+          ...(env.LICHESS_TOKEN ? { Authorization: `Bearer ${env.LICHESS_TOKEN}` } : {}),
+        },
         signal: controller.signal,
       });
       if (res.status === 429) {

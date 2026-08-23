@@ -139,15 +139,26 @@ uncovered positions during idle time. It is purely an optimization: one request 
 capped per call, no retries — a failed warm just means the next prompt pays latency it
 would have paid anyway.
 
-## Local gotcha
+## The 401, properly diagnosed (2026-08)
 
-`explorer.lichess.ovh` answers **401 from an nginx** on the primary dev machine, for every
-request regardless of headers, while `lichess.org` itself responds normally — so the cache
-stays cold there. **Since Flow F3 this is mitigated, not fixed:** once the snapshot is
+The long-standing "explorer answers 401 on the dev machine" was **not** a local or
+network problem. Re-diagnosis showed the 401 comes from lichess's own nginx on **every**
+network tried (home ISP, mobile hotspot, VPN — v4 and v6), on both hostnames
+(`explorer.lichess.ovh` and the spec's documented `explorer.lichess.org`, same server),
+regardless of browser-like headers. The response is `401 Authorization Required` and its
+CORS allow-list includes `Authorization` — the host now refuses **anonymous** requests.
+
+Both the cache service and the snapshot generator therefore send
+`Authorization: Bearer $LICHESS_TOKEN` when `LICHESS_TOKEN` is set in `apps/api/.env`
+(a lichess personal access token, no scopes — see
+[dev-setup](../06-workflows/dev-setup.md)). Without a token, requests still go out
+anonymously and the service degrades exactly as before: cache → snapshot → book. The
+default hostname is now the documented `explorer.lichess.org`.
+
+**Since Flow F3 a cold live host is mitigated regardless:** once the snapshot is
 imported, the snapshot tier answers for the common opening positions, so guided building
-ranks replies by real frequency even with the live host unreachable; only positions
-outside the snapshot's depth/floor still fall back to the book. Diagnose with
-`pnpm --filter @chess-prep/api probe:explorer`, which now prints **which tier answered**
-(`live` / `fresh-cache` / `stale-cache` / `snapshot` / `none`); the service's silence is
-deliberate, so the probe is how you tell "no data" from "broken". See
-[dev-setup](../06-workflows/dev-setup.md).
+ranks replies by real frequency; only positions outside the snapshot's depth/floor fall
+back to the book. Diagnose with `pnpm --filter @chess-prep/api probe:explorer`, which
+prints **which tier answered** (`live` / `fresh-cache` / `stale-cache` / `snapshot` /
+`none`) and warns specifically on a 401; the service's silence is otherwise deliberate,
+so the probe is how you tell "no data" from "broken".

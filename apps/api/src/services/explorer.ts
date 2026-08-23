@@ -24,6 +24,7 @@ import {
 } from '@chess-prep/shared';
 import { db } from '../db/client.js';
 import { explorerEntries, explorerSnapshotEntries } from '../db/schema.js';
+import { env } from '../env.js';
 import { HttpError } from './repertoires.js';
 
 /**
@@ -35,7 +36,10 @@ const SPEEDS = ['blitz', 'rapid', 'classical'] as const;
 const MIN_RATING = 1600;
 export const EXPLORER_SOURCE = `lichess:${SPEEDS.join(',')}:${MIN_RATING}`;
 
-const EXPLORER_URL = 'https://explorer.lichess.ovh/lichess';
+// `explorer.lichess.org` is the hostname the lichess OpenAPI spec documents
+// (the historical `explorer.lichess.ovh` resolves to the same nginx). The host
+// answers 401 to anonymous requests — set LICHESS_TOKEN in apps/api/.env.
+const EXPLORER_URL = 'https://explorer.lichess.org/lichess';
 /** Lichess asks for a descriptive UA so they can contact us about abuse. */
 const USER_AGENT = 'chess-prep/0.1 (personal opening-prep tool)';
 const FETCH_TIMEOUT_MS = 6000;
@@ -49,6 +53,8 @@ const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  */
 let backoffUntilMs = 0;
 const BACKOFF_MS = 60_000;
+/** Warn about a 401 once per process, not once per position. */
+let warned401 = false;
 
 export function explorerBackoffRemainingMs(now = Date.now()): number {
   return Math.max(0, backoffUntilMs - now);
@@ -200,13 +206,25 @@ async function fetchFromLichess(fenKeyStr: string): Promise<ExplorerEntry | null
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(`${EXPLORER_URL}?${params}`, {
-      headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': USER_AGENT,
+        ...(env.LICHESS_TOKEN ? { Authorization: `Bearer ${env.LICHESS_TOKEN}` } : {}),
+      },
       signal: controller.signal,
     });
     if (res.status === 429) {
       backoffUntilMs = Date.now() + BACKOFF_MS;
       console.warn('[explorer] rate limited — backing off for 60s');
       return null;
+    }
+    if (res.status === 401 && !warned401) {
+      warned401 = true;
+      console.warn(
+        env.LICHESS_TOKEN
+          ? '[explorer] 401 with a token set — is LICHESS_TOKEN valid?'
+          : '[explorer] 401 — the explorer refuses anonymous requests; set LICHESS_TOKEN in apps/api/.env',
+      );
     }
     if (!res.ok) return null;
     return parseExplorerResponse(fenKeyStr, await res.json());
