@@ -23,7 +23,10 @@ scripted fake:
   sentinels clamp to wp 0/1, which is what stops already-won positions lighting up.
 - `detectOnlyMove()` — the atomic §3 operation on an opponent node.
 - `rashidAnalyze()` — the §4 walk: root candidates → forced-line traversal → ranked
-  `RashidResult`.
+  `RashidResult`, including a per-candidate **"why not" trace**
+  (`RashidCandidateDiag`: prefiltered / no-tightrope+end-reason / cap-busted /
+  qualified). A silent rejection is indistinguishable from blindness — the trace is
+  what R6 tuning and any human asking "why no arrow here?" read.
 - `DEFAULT_RASHID_CONFIG` + `rashidConfigKey()` — the config hash destined for the
   derived-result cache key.
 

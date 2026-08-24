@@ -194,6 +194,24 @@ describe('rashidAnalyze', () => {
     expect(r.best?.riskScore).toBe(20);
     expect(r.lines).toHaveLength(1); // the d4 line forces nothing
 
+    // The "why not" trace names every candidate's fate, in root order.
+    expect(r.candidates.map((c) => [c.uci, c.verdict])).toEqual([
+      ['e2e4', 'qualified'],
+      ['d2d4', 'no-tightrope'],
+      ['a2a3', 'prefiltered'],
+    ]);
+    const d4 = r.candidates[1];
+    if (d4?.verdict !== 'no-tightrope') throw new Error('expected no-tightrope for d4');
+    expect(d4.endReason).toBe('open');
+    expect(d4.plies).toBe(1); // only the root move itself was played
+    expect(d4.endGap).toBeGreaterThan(0);
+    expect(d4.endGap).toBeLessThan(DEFAULT_RASHID_CONFIG.narrowThreshold);
+    const a3 = r.candidates[2];
+    if (a3?.verdict !== 'prefiltered') throw new Error('expected prefiltered for a3');
+    expect(a3.rootConcession).toBeGreaterThan(
+      DEFAULT_RASHID_CONFIG.heroSacrificeCap + DEFAULT_RASHID_CONFIG.rootPrefilterMargin,
+    );
+
     // Laziness gate (plan R1 exit): exactly these five calls, nothing past a
     // failed check, and the prefiltered a3 subtree never touched.
     expect(calls.map((c) => c.fen)).toEqual([fenKey(START) as string, F1, F2, F3, F1d]);
@@ -234,6 +252,14 @@ describe('rashidAnalyze', () => {
     // The forced sequence produced no pinch points → nothing lights up.
     expect(r.lightsUp).toBe(false);
     expect(r.lines).toHaveLength(0);
+    // Diagnostics distinguish the two dead ends: the check line ran out of
+    // budget, the quiet line hit an open node.
+    expect(
+      r.candidates.map((c) => [c.uci, c.verdict, c.verdict === 'no-tightrope' ? c.endReason : null]),
+    ).toEqual([
+      ['e1e8', 'no-tightrope', 'budget'],
+      ['e1e5', 'no-tightrope', 'open'],
+    ]);
     expect(calls.some((c) => c.fen === F1forced)).toBe(false);
     // maxPly hit at the hero node after Ng8 → one MultiPV-1 eval closes it.
     expect(calls.find((c) => c.fen === F2)?.multipv).toBe(1);
@@ -314,9 +340,15 @@ describe('rashidAnalyze', () => {
     const r = await rashidAnalyze(START, 'w', analyze, cfg({ minLengthToDisplay: 1 }));
 
     // The d4 line has a pinch point but concedes ~0.49 wp against perfect
-    // defense — far past the cap. It must not survive as a "trap".
+    // defense — far past the cap. It must not survive as a "trap"…
     expect(r.lightsUp).toBe(false);
     expect(r.lines).toHaveLength(0);
+    // …but the diagnostics must say exactly why it died: it passed the root
+    // prefilter, found a length-1 tightrope, and busted the cap post-walk.
+    const d4 = r.candidates.find((c) => c.uci === 'd2d4');
+    if (d4?.verdict !== 'cap-busted') throw new Error('expected cap-busted for d4');
+    expect(d4.length).toBe(1);
+    expect(d4.sacrifice).toBeGreaterThan(DEFAULT_RASHID_CONFIG.heroSacrificeCap);
   });
 
   it('throws on caller bugs instead of returning a silent no-result', async () => {

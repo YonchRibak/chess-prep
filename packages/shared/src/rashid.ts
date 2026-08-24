@@ -251,6 +251,34 @@ export interface RashidLine {
   sacrifice: number;
 }
 
+/** Why a walk stopped where it did. */
+export type WalkEndReason =
+  | 'open' // the opponent gained a real choice (gap < narrowThreshold)
+  | 'terminal' // checkmate / stalemate / draw rule on the board
+  | 'repetition' // position repeated inside the line (perpetual-shaped)
+  | 'budget'; // maxPly reached
+
+/**
+ * Per-root-candidate verdict — the "why not" trace. Rashid rejecting a move
+ * silently is indistinguishable from Rashid not seeing it; tuning (plan R6)
+ * and any human trying to understand a non-detection need the reason.
+ */
+export type RashidCandidateDiag =
+  // Skipped before walking: the root eval already concedes more than
+  // cap + margin versus the best move.
+  | { uci: string; verdict: 'prefiltered'; rootConcession: number }
+  // Walked, but no pinch point found before the line ended.
+  | {
+      uci: string;
+      verdict: 'no-tightrope';
+      endReason: WalkEndReason;
+      endGap: number | null;
+      plies: number;
+    }
+  // Found a tightrope, but perfect defense costs more than the cap.
+  | { uci: string; verdict: 'cap-busted'; length: number; sacrifice: number }
+  | { uci: string; verdict: 'qualified'; length: number };
+
 export interface RashidResult {
   /** True iff `best` exists — a qualifying line with length ≥
    * minLengthToDisplay. */
@@ -262,6 +290,8 @@ export interface RashidResult {
   /** Hero-perspective score of the engine's best root move (the perfect-play
    * baseline the sacrifice is measured against). */
   bestRootScore: number;
+  /** One entry per analyzed root candidate, in root ranking order. */
+  candidates: RashidCandidateDiag[];
 }
 
 interface ScoredMove {
@@ -305,13 +335,22 @@ function terminalScore(chess: Chess, heroColor: 'w' | 'b'): number {
  * ends, a position repeats, or maxPly is hit. Returns the line — length 0 is
  * a valid outcome meaning "this move forces nothing".
  */
+interface WalkOutcome {
+  line: string[];
+  pinchPoints: PinchPoint[];
+  riskScore: number;
+  endReason: WalkEndReason;
+  /** The gap at the open node that ended the walk; null for other reasons. */
+  endGap: number | null;
+}
+
 async function walkLine(
   rootFen: string,
   rootUci: string,
   heroColor: 'w' | 'b',
   analyze: RashidAnalyzeFn,
   cfg: RashidConfig,
-): Promise<{ line: string[]; pinchPoints: PinchPoint[]; riskScore: number }> {
+): Promise<WalkOutcome> {
   const chess = new Chess(rootFen);
   applyUci(chess, rootUci);
   const line: string[] = [rootUci];
@@ -325,20 +364,32 @@ async function walkLine(
     const fen = chess.fen();
 
     if (chess.isGameOver()) {
-      return { line, pinchPoints, riskScore: terminalScore(chess, heroColor) };
+      return {
+        line,
+        pinchPoints,
+        riskScore: terminalScore(chess, heroColor),
+        endReason: 'terminal',
+        endGap: null,
+      };
     }
     const key = fenKey(fen) as string;
     if (seen.has(key)) {
       // Repetition inside the forced line — treat as the draw it is heading
       // toward. wp(0) = 0.5, which the sacrifice cap then judges honestly.
-      return { line, pinchPoints, riskScore: 0 };
+      return { line, pinchPoints, riskScore: 0, endReason: 'repetition', endGap: null };
     }
     seen.add(key);
 
     if (line.length >= cfg.maxPly) {
       // Budget cap: one MultiPV-1 call for the final eval, hero POV.
       const a = await analyze(fen, 1);
-      return { line, pinchPoints, riskScore: heroScoreOf(topOf(a, 'maxPly eval'), heroToMove) };
+      return {
+        line,
+        pinchPoints,
+        riskScore: heroScoreOf(topOf(a, 'maxPly eval'), heroToMove),
+        endReason: 'budget',
+        endGap: null,
+      };
     }
 
     const legal = chess.moves({ verbose: true });
@@ -371,7 +422,13 @@ async function walkLine(
     if (!assess.isOnlyMove) {
       // Tightrope ends: the opponent has a real choice here, and their best
       // reply's eval is the perfect-defense outcome of the whole line.
-      return { line, pinchPoints, riskScore: assess.bestScore };
+      return {
+        line,
+        pinchPoints,
+        riskScore: assess.bestScore,
+        endReason: 'open',
+        endGap: assess.gap,
+      };
     }
     pinchPoints.push({
       ply: line.length + 1,
@@ -420,19 +477,38 @@ export async function rashidAnalyze(
   const bestRootWp = wp(bestRootScore, cfg.wpScale);
 
   const lines: RashidLine[] = [];
+  const candidates: RashidCandidateDiag[] = [];
   for (const candidate of rootMoves) {
     // Root prefilter (plan §C1.2): if the move already concedes more than the
     // cap at the root, no tightrope can redeem it — skip the whole walk.
     const concession = bestRootWp - wp(candidate.score, cfg.wpScale);
-    if (concession > cfg.heroSacrificeCap + cfg.rootPrefilterMargin) continue;
+    if (concession > cfg.heroSacrificeCap + cfg.rootPrefilterMargin) {
+      candidates.push({ uci: candidate.uci, verdict: 'prefiltered', rootConcession: concession });
+      continue;
+    }
 
     const walked = await walkLine(rootFen, candidate.uci, heroColor, analyze, cfg);
     const length = walked.pinchPoints.length;
-    if (length === 0) continue; // forces nothing — not a Rashid line
+    if (length === 0) {
+      // Forces nothing — not a Rashid line.
+      candidates.push({
+        uci: candidate.uci,
+        verdict: 'no-tightrope',
+        endReason: walked.endReason,
+        endGap: walked.endGap,
+        plies: walked.line.length,
+      });
+      continue;
+    }
 
     const sacrifice = bestRootWp - wp(walked.riskScore, cfg.wpScale);
-    if (sacrifice > cfg.heroSacrificeCap) continue; // too dubious even for a trap
+    if (sacrifice > cfg.heroSacrificeCap) {
+      // Too dubious even for a trap.
+      candidates.push({ uci: candidate.uci, verdict: 'cap-busted', length, sacrifice });
+      continue;
+    }
 
+    candidates.push({ uci: candidate.uci, verdict: 'qualified', length });
     const missScores = walked.pinchPoints.map((p) => p.missScore);
     lines.push({
       rootUci: candidate.uci,
@@ -448,5 +524,5 @@ export async function rashidAnalyze(
 
   lines.sort(compareLines);
   const best = lines.find((l) => l.length >= cfg.minLengthToDisplay) ?? null;
-  return { lightsUp: best !== null, best, lines, bestRootScore };
+  return { lightsUp: best !== null, best, lines, bestRootScore, candidates };
 }

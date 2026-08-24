@@ -69,6 +69,8 @@ export function RashidLab() {
   const [fen, setFen] = useState(STARTING_FEN);
   const [nodes, setNodes] = useState(300_000);
   const [minLength, setMinLength] = useState(1);
+  const [cap, setCap] = useState(DEFAULT_RASHID_CONFIG.heroSacrificeCap);
+  const [threshold, setThreshold] = useState(DEFAULT_RASHID_CONFIG.narrowThreshold);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState<number | null>(null);
   const [result, setResult] = useState<RashidResult | null>(null);
@@ -123,6 +125,8 @@ export function RashidLab() {
       const r = await rashidAnalyze(fen, hero, fn, {
         ...DEFAULT_RASHID_CONFIG,
         minLengthToDisplay: minLength,
+        heroSacrificeCap: cap,
+        narrowThreshold: threshold,
       });
       setElapsed(Math.round(performance.now() - t0));
       setResult(r);
@@ -139,6 +143,37 @@ export function RashidLab() {
     return ucis
       .map((u) => c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u.slice(4) || undefined }).san)
       .join(' ');
+  }
+
+  function sanOne(rootFen: string, uci: string): string {
+    try {
+      return sanLine(rootFen, [uci]);
+    } catch {
+      return uci; // stale FEN edit mid-render — show the raw move rather than crash
+    }
+  }
+
+  /** The "why not" trace, one human-readable line per root candidate. */
+  function diagText(c: RashidResult['candidates'][number]): string {
+    switch (c.verdict) {
+      case 'qualified':
+        return `qualified — tightrope of ${c.length}`;
+      case 'prefiltered':
+        return `prefiltered at root — concedes ${(c.rootConcession * 100).toFixed(1)}pp vs best (cap ${(cap * 100).toFixed(0)}pp)`;
+      case 'cap-busted':
+        return `cap busted — found a length-${c.length} tightrope but perfect defense costs ${(c.sacrifice * 100).toFixed(1)}pp`;
+      case 'no-tightrope':
+        switch (c.endReason) {
+          case 'open':
+            return `no tightrope — opponent had a real choice after ${c.plies} plies (gap ${((c.endGap ?? 0) * 100).toFixed(1)}pp < ${(threshold * 100).toFixed(0)}pp)`;
+          case 'terminal':
+            return `no tightrope — game ended after ${c.plies} plies`;
+          case 'repetition':
+            return `no tightrope — line repeats after ${c.plies} plies`;
+          case 'budget':
+            return `no tightrope — maxPly budget hit after ${c.plies} plies`;
+        }
+    }
   }
 
   const est = estimatePerPositionMs(rows);
@@ -225,6 +260,30 @@ export function RashidLab() {
                 onChange={(e) => setMinLength(Math.max(1, Number(e.target.value) || 1))}
               />
             </label>
+            <label className="text-xs text-slate-400" title="Max win-prob conceded vs perfect defense. Raise toward 0.2+ for Tal-mode.">
+              Sacrifice cap
+              <input
+                type="number"
+                step={0.01}
+                min={0}
+                max={0.5}
+                className="w-20 mt-1 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs block"
+                value={cap}
+                onChange={(e) => setCap(Number(e.target.value) || 0)}
+              />
+            </label>
+            <label className="text-xs text-slate-400" title="Win-prob gap that makes an opponent reply an only-move. Lower = more (weaker) tightropes.">
+              Narrow threshold
+              <input
+                type="number"
+                step={0.01}
+                min={0.01}
+                max={0.5}
+                className="w-20 mt-1 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs block"
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value) || DEFAULT_RASHID_CONFIG.narrowThreshold)}
+              />
+            </label>
             <Btn variant="primary" onClick={() => void runRashid()} disabled={running}>
               {running ? 'Analyzing…' : 'Run Rashid'}
             </Btn>
@@ -256,6 +315,19 @@ export function RashidLab() {
                 </p>
               </div>
             ))}
+            <details className="mt-1">
+              <summary className="text-slate-500 cursor-pointer">
+                Why-not trace — every root candidate&apos;s fate ({result.candidates.length})
+              </summary>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {result.candidates.map((c) => (
+                  <li key={c.uci} className="text-slate-400">
+                    <span className="font-mono text-slate-300">{sanOne(fen, c.uci)}</span>{' '}
+                    — {diagText(c)}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </div>
         )}
         {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
