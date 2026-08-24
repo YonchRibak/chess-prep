@@ -1,5 +1,11 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { AnalyzedMove, DrillAttemptDto, OpeningId, SrsCardDto } from '@chess-prep/shared';
+import type {
+  AnalyzedMove,
+  DrillAttemptDto,
+  OpeningId,
+  RashidResult,
+  SrsCardDto,
+} from '@chess-prep/shared';
 import type { RepertoireFull } from '../../api/client.ts';
 
 /**
@@ -20,6 +26,11 @@ import type { RepertoireFull } from '../../api/client.ts';
  *   the expensive searches are never welded to Rashid's tunable constants.
  *   Side-to-move perspective (hero-independent: both colors share entries).
  *   A derivable artifact: client-only, never synced, safe to clear.
+ * - rashidResults: Rashid cache layer B — derived `RashidResult`s, keyed by
+ *   everything that shapes them: position, hero color, engine build, node
+ *   budget, AND the full tuning config (via `rashidConfigKey`). Retuning a
+ *   constant changes the key, so stale derivations can never be served.
+ *   Same derivable-artifact rules as rashidRaw.
  */
 interface ChessPrepDB extends DBSchema {
   srsCards: {
@@ -60,6 +71,23 @@ interface ChessPrepDB extends DBSchema {
     key: string;
     value: RashidRawEntry;
   };
+  rashidResults: {
+    // key is rashidResultKey(fenKey, heroColor, engineId, nodes, configKey)
+    key: string;
+    value: RashidResultEntry;
+  };
+}
+
+/** One derived Rashid analysis — cache layer B. */
+export interface RashidResultEntry {
+  key: string;
+  fenKey: string;
+  heroColor: 'w' | 'b';
+  engineId: string;
+  nodes: number;
+  configKey: string;
+  result: RashidResult;
+  savedAt: string;
 }
 
 /** One cached MultiPV search — Rashid cache layer A. */
@@ -79,9 +107,10 @@ let dbPromise: Promise<IDBPDatabase<ChessPrepDB>> | null = null;
 export function getDb(): Promise<IDBPDatabase<ChessPrepDB>> {
   if (!dbPromise) {
     // v2 added `openingNames` (Phase 9a), v3 the attempt log (Phase 9d), v4
-    // the Rashid raw-analysis cache. The upgrade handler is additive and
-    // idempotent, so an existing database keeps its cards and repertoires.
-    dbPromise = openDB<ChessPrepDB>('chess-prep', 4, {
+    // the Rashid raw-analysis cache, v5 the derived-result cache. The upgrade
+    // handler is additive and idempotent, so an existing database keeps its
+    // cards and repertoires.
+    dbPromise = openDB<ChessPrepDB>('chess-prep', 5, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('srsCards')) {
           const cards = db.createObjectStore('srsCards', { keyPath: 'moveId' });
@@ -110,6 +139,9 @@ export function getDb(): Promise<IDBPDatabase<ChessPrepDB>> {
         }
         if (!db.objectStoreNames.contains('rashidRaw')) {
           db.createObjectStore('rashidRaw', { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('rashidResults')) {
+          db.createObjectStore('rashidResults', { keyPath: 'key' });
         }
       },
     });
@@ -302,6 +334,23 @@ export async function putRashidRawLocal(entry: RashidRawEntry): Promise<void> {
 export async function clearRashidRawLocal(): Promise<void> {
   const db = await getDb();
   await db.clear('rashidRaw');
+}
+
+/* ---------------- Rashid derived-result cache (layer B) ---------------- */
+
+export async function getRashidResultLocal(key: string): Promise<RashidResultEntry | undefined> {
+  const db = await getDb();
+  return db.get('rashidResults', key);
+}
+
+export async function putRashidResultLocal(entry: RashidResultEntry): Promise<void> {
+  const db = await getDb();
+  await db.put('rashidResults', entry);
+}
+
+export async function clearRashidResultsLocal(): Promise<void> {
+  const db = await getDb();
+  await db.clear('rashidResults');
 }
 
 /* ---------------- push queue ---------------- */

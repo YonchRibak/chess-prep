@@ -6,6 +6,7 @@ import { useChessRules } from '../lib/chess/useChessRules.ts';
 import { Board } from '../components/Board.tsx';
 import { Btn, Card } from '../components/ui.tsx';
 import { EnginePanel } from '../components/EnginePanel.tsx';
+import { RashidPanel } from '../components/RashidPanel.tsx';
 import { OpeningHeader } from '../components/OpeningHeader.tsx';
 import { BuilderPrompt } from '../components/BuilderPrompt.tsx';
 import { useEngine } from '../lib/engine/useEngine.ts';
@@ -314,6 +315,11 @@ function Editor({ active }: { active: RepertoireFull }) {
             error={engine.error}
             enabled={engineEnabled}
             onToggleEnabled={() => setEngineEnabled((e) => !e)}
+          />
+
+          <RashidPanel
+            fen={currentFullFen}
+            heroColor={active.color === 'white' ? 'w' : 'b'}
           />
 
           <Card title="Position">

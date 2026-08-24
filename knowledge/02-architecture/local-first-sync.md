@@ -8,7 +8,7 @@ card fields.
 ## IndexedDB
 
 [apps/web/src/lib/idb/schema.ts](../../apps/web/src/lib/idb/schema.ts) — database
-`chess-prep`, version 4, via `idb`. Eight object stores:
+`chess-prep`, version 5, via `idb`. Nine object stores:
 
 | Store | Key | Purpose |
 |---|---|---|
@@ -20,6 +20,7 @@ card fields.
 | `drillAttempts` | attempt `id` | Phase 9d: the drill-attempt log. Indexes on `at` and `moveId`. **Not a cache** — the `mistakes` mode builds its queue from this, so it must be local. |
 | `attemptQueue` | attempt `id` | Attempts awaiting upload. |
 | `rashidRaw` | composite `rashidRawKey` | [Rashid](../03-domain/rashid.md) cache layer A — raw MultiPV engine output keyed by `(fenKey, engine build, node budget, multipv)`. A derivable artifact: never synced, safe to clear (`clearRashidRawLocal`). |
+| `rashidResults` | composite `rashidResultKey` | Rashid cache layer B — derived `RashidResult`s, keyed additionally by hero color and the full tuning config (`rashidConfigKey`), so retuning can never serve a stale derivation. Same derivable-artifact rules. |
 
 Note `srsCards` is keyed by `moveId`, not card `id` — consistent with "one card per
 move".

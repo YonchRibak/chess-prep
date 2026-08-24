@@ -77,13 +77,30 @@ wasm engine is **classical eval, not NNUE**, which undervalues speculative sacri
 - **A qualifying line must survive the sacrifice cap twice** — a cheap root prefilter
   (skip the walk) and the real post-walk check on the perfect-defense outcome.
 
+**R3 — live probe + cache layer B**
+([rashidLive.ts](../../apps/web/src/lib/engine/rashidLive.ts) ·
+[useRashid.ts](../../apps/web/src/lib/engine/useRashid.ts) ·
+[RashidPanel.tsx](../../apps/web/src/components/RashidPanel.tsx) ·
+tests [rashidLive.test.ts](../../apps/web/src/lib/engine/rashidLive.test.ts)):
+`requestRashid(fen, heroColor)` is a layer-B read-through probe on a **dedicated
+engine instance** — the editor's eval panel keeps the singleton busy, and sharing one
+engine would make the panel and the walk cancel each other's searches (a superseded
+`analyzeOnce` never resolves). The `rashidResults` store (db v5) keys derived results
+by `(fenKey, heroColor, engineId, nodes, rashidConfigKey)` — retuning any constant
+changes the key, so a stale derivation can never be served. Probes are serialized,
+cancellable (`RashidCancelled` is control flow, not an error), and run at
+`NODES_LIVE = 300k` with `maxPly: 4`. **Cross-instance gate rule, tested:** every
+probe checks the *singleton's* gate before starting and before every search — while
+a drill is in progress, Rashid answers nothing, even from cache, even on its own
+worker. The `RashidPanel` in the repertoire editor (below the engine panel) surfaces
+the result as data — off by default until R5 precompute makes hits instant.
+
 ## What is NOT built
 
-- **R3** — live probe in the editor, and cache layer B (derived `RashidResult`s keyed
-  by `rashidConfigKey`). The lab page recomputes the derivation on every run.
-- **R4** — arrows/badges (quantized brush matrix; see plan §C9). No product surface
-  shows Rashid anywhere yet — the lab is a dev harness.
-- **R5** — background precompute over the repertoire tree.
+- **R4** — arrows/badges (quantized brush matrix; see plan §C9). The editor panel
+  shows data only.
+- **R5** — background precompute over the repertoire tree (which will also flip the
+  editor panel's default from off to on).
 - **R6** — tuning pass + triviality filter.
 
 ## Rules for future phases
