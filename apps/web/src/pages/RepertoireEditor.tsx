@@ -11,6 +11,8 @@ import { OpeningHeader } from '../components/OpeningHeader.tsx';
 import { BuilderPrompt } from '../components/BuilderPrompt.tsx';
 import { useEngine } from '../lib/engine/useEngine.ts';
 import { engineArrows } from '../lib/engine/arrows.ts';
+import { useRashid } from '../lib/engine/useRashid.ts';
+import { RASHID_BRUSHES, rashidShapes } from '../lib/engine/rashidArrows.ts';
 import type { BoardColor } from '../lib/chess/useBoard.ts';
 import { api, ApiError, type RepertoireFull, type RepertoireMove } from '../api/client.ts';
 
@@ -56,6 +58,7 @@ function Editor({ active }: { active: RepertoireFull }) {
   const [lastMoveId, setLastMoveId] = useState<string | null>(null);
   const [orientation, setOrientation] = useState<BoardColor>(active.color);
   const [engineEnabled, setEngineEnabled] = useState(false);
+  const [rashidEnabled, setRashidEnabled] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,10 +97,21 @@ function Editor({ active }: { active: RepertoireFull }) {
     multipv: 3,
   });
 
+  // Rashid live probe on the displayed position (R3/R4).
+  const rashid = useRashid(currentFullFen, active.color === 'white' ? 'w' : 'b', rashidEnabled);
+
   // Suggested moves as board arrows (best = green, then blue / yellow).
   const engineShapes = useMemo(
     () => (engineEnabled ? engineArrows(engine.progress, { max: 3 }) : []),
     [engineEnabled, engine.progress],
+  );
+
+  // Arrow-mode precedence: while the Rashid probe is on, the board belongs to
+  // Rashid (its no-trap answer is an *empty* board) — mixing the engine's
+  // top-3 back in would make the two arrow languages unreadable.
+  const boardShapes = useMemo(
+    () => (rashidEnabled ? rashidShapes(rashid.result) : engineShapes),
+    [rashidEnabled, rashid.result, engineShapes],
   );
 
   function navigateToFenKey(fenKey: string, viaMoveId: string | null) {
@@ -258,7 +272,8 @@ function Editor({ active }: { active: RepertoireFull }) {
           <Board
             rules={rules}
             orientation={orientation}
-            shapes={engineShapes}
+            shapes={boardShapes}
+            extraBrushes={RASHID_BRUSHES}
             onMovePlayed={(san) => void handleMovePlayed(san)}
           />
           <div className="flex flex-wrap gap-2 justify-center">
@@ -319,7 +334,9 @@ function Editor({ active }: { active: RepertoireFull }) {
 
           <RashidPanel
             fen={currentFullFen}
-            heroColor={active.color === 'white' ? 'w' : 'b'}
+            state={rashid}
+            enabled={rashidEnabled}
+            onToggle={setRashidEnabled}
           />
 
           <Card title="Position">

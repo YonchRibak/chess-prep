@@ -78,7 +78,8 @@ phased plan at [rashid-dev-plan.md](../../rashid-dev-plan.md), status detail in
 | **R2** ✅ | Engine adapter (`rashidAdapter.ts`: sequential queue, gate fail-fast, engine-id capture) + cache layer A (`rashidRaw` IndexedDB store, db v4) |
 | **R0** ✅ | Measured (rashid-dev-plan.md §R0 results): ~350ms per 300k-node pv4 search, ~3s/position, MultiPV width free at fixed nodes → **in-browser precompute confirmed**, budgets 1M precompute / 300k live. Caveat: the wasm engine is classical-eval (not NNUE) — it undervalues speculative sacs, the very moves Rashid hunts |
 | **R3** ✅ | Live probe on a dedicated engine (`rashidLive.ts`, singleton-gate-aware) + cache layer B (`rashidResults`, db v5, config-keyed) + `RashidPanel` in the editor (data only, off by default) + the "why not" candidate trace |
-| **R4–R6** | Not started — arrows, precompute, tuning |
+| **R4** ✅ | Board arrows (`rashidArrows.ts`): hue = risk band via custom brushes, thickness = reward floor, badge = length; pale runners-up capped at 2; Rashid-vs-engine arrow-mode precedence in the editor |
+| **R5–R6** | Not started — precompute, tuning |
 
 ## Parked
 

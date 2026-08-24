@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { Key } from 'chessground/types';
-import type { DrawShape } from 'chessground/draw';
+import type { DrawBrush, DrawShape } from 'chessground/draw';
 import type { Square } from 'chess.js';
 import { useBoard, type BoardColor } from '../lib/chess/useBoard.ts';
 import type { ChessRules } from '../lib/chess/useChessRules.ts';
@@ -12,6 +12,8 @@ interface BoardProps {
   movableColor?: BoardColor | null;
   /** Optional shape annotations (used later for opponent heatmap). */
   shapes?: DrawShape[];
+  /** Custom brushes the shapes may reference (init-time registration). */
+  extraBrushes?: Record<string, DrawBrush>;
   /** Notified after a legal move is accepted by the rules engine. */
   onMovePlayed?: (san: string) => void;
 }
@@ -23,6 +25,7 @@ export function Board({
   orientation,
   movableColor,
   shapes,
+  extraBrushes,
   onMovePlayed,
 }: BoardProps) {
   const turnColor = COLOR_LONG[rules.turn];
@@ -51,6 +54,7 @@ export function Board({
     lastMove,
     check,
     shapes,
+    extraBrushes,
     onMove: (from, to) => {
       const san = rules.tryMove(from as Square, to as Square);
       if (san) onMovePlayed?.(san);

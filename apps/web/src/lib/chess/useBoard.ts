@@ -3,7 +3,7 @@ import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { Config } from 'chessground/config';
 import type { Key } from 'chessground/types';
-import type { DrawShape } from 'chessground/draw';
+import type { DrawBrush, DrawBrushes, DrawShape } from 'chessground/draw';
 
 export type BoardColor = 'white' | 'black';
 
@@ -22,6 +22,10 @@ export interface UseBoardOptions {
   check: BoardColor | null;
   /** Extra annotation shapes (arrows, circles) to draw on the board. */
   shapes?: DrawShape[];
+  /** Additional named brushes to register beyond chessground's defaults, so
+   * `shapes` can reference custom hues/opacities (e.g. the Rashid bands).
+   * Init-time only — chessground merges them into its default brush set. */
+  extraBrushes?: Record<string, DrawBrush>;
   /** Fired when the user completes a drag/click move. */
   onMove?: (from: Key, to: Key) => void;
 }
@@ -125,6 +129,9 @@ function buildConfig(
       enabled: true,
       visible: true,
       defaultSnapToValidMove: true,
+      // Partial by design: chessground deep-merges this over its default
+      // green/blue/yellow/red set, so defaults stay available.
+      ...(opts.extraBrushes ? { brushes: opts.extraBrushes as DrawBrushes } : {}),
     },
     highlight: {
       lastMove: true,

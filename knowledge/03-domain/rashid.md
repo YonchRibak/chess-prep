@@ -95,10 +95,23 @@ a drill is in progress, Rashid answers nothing, even from cache, even on its own
 worker. The `RashidPanel` in the repertoire editor (below the engine panel) surfaces
 the result as data — off by default until R5 precompute makes hits instant.
 
+**R4 — board arrows**
+([rashidArrows.ts](../../apps/web/src/lib/engine/rashidArrows.ts) +
+[rashidArrows.test.ts](../../apps/web/src/lib/engine/rashidArrows.test.ts)):
+spec §9 adapted to chessground 9.2 — **hue = risk band** (four quantized custom
+brushes; a smooth gradient is impossible, brushes are a named set), **thickness =
+reward floor** (per-shape `modifiers.lineWidth`), **badge digit = length** (shape
+`label`). Secondary lines render as pale brush variants, capped at 2. Chessground
+brushes cannot dash, so the spec's color-blind-safe stroke is replaced by a different
+rule: the hue is never the only channel — the `RashidPanel` always shows the exact
+numbers next to the board. Custom brushes register through `Board`'s `extraBrushes`
+prop (init-time, merged over chessground's defaults). **Arrow-mode precedence:**
+while the probe toggle is on, the board's shapes belong to Rashid (a no-trap answer
+is an *empty* board); the engine's top-3 arrows return when it is off — the two arrow
+languages never mix.
+
 ## What is NOT built
 
-- **R4** — arrows/badges (quantized brush matrix; see plan §C9). The editor panel
-  shows data only.
 - **R5** — background precompute over the repertoire tree (which will also flip the
   editor panel's default from off to on).
 - **R6** — tuning pass + triviality filter.
