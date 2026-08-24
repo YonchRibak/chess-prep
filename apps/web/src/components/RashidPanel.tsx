@@ -1,8 +1,9 @@
 import { Chess } from 'chess.js';
 import { formatRashidScore } from '@chess-prep/shared';
-import { Card } from './ui.tsx';
+import { Btn, Card } from './ui.tsx';
 import { RASHID_BAND_HEX, riskBand } from '../lib/engine/rashidArrows.ts';
 import type { RashidHookState } from '../lib/engine/useRashid.ts';
+import type { RashidPrecomputeProgress } from '../lib/engine/rashidPrecompute.ts';
 
 /**
  * Rashid probe panel (plan R3/R4). Presentational — the editor owns the
@@ -19,11 +20,19 @@ export function RashidPanel({
   state,
   enabled,
   onToggle,
+  precompute,
+  precomputing,
+  onStartPrecompute,
+  onCancelPrecompute,
 }: {
   fen: string;
   state: RashidHookState;
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
+  precompute: RashidPrecomputeProgress | null;
+  precomputing: boolean;
+  onStartPrecompute: () => void;
+  onCancelPrecompute: () => void;
 }) {
   function san(ucis: string[]): string {
     try {
@@ -107,6 +116,44 @@ export function RashidPanel({
           )}
         </div>
       )}
+
+      {/* R5: background precompute — fills the caches so probes are instant. */}
+      <div className="mt-3 pt-2 border-t border-slate-700/50 flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-slate-500">Precompute</span>
+          {precomputing ? (
+            <Btn onClick={onCancelPrecompute}>Stop</Btn>
+          ) : (
+            <Btn onClick={onStartPrecompute}>
+              {precompute && precompute.done < precompute.total ? 'Resume' : 'Run'}
+            </Btn>
+          )}
+        </div>
+        {precompute && (
+          <div className="text-xs text-slate-400">
+            <div className="h-1.5 rounded bg-slate-800 overflow-hidden mb-1">
+              <div
+                className="h-full bg-emerald-600"
+                style={{
+                  width: `${precompute.total ? (100 * precompute.done) / precompute.total : 0}%`,
+                }}
+              />
+            </div>
+            {precompute.done}/{precompute.total} positions · {precompute.computed} fresh ·{' '}
+            {precompute.cached} cached · {precompute.lit} traps
+            {precompute.failed > 0 && <> · {precompute.failed} skipped</>}
+            {precompute.paused && (
+              <span className="text-amber-400"> · paused (drill in progress)</span>
+            )}
+          </div>
+        )}
+        {!precompute && (
+          <p className="text-[11px] text-slate-500">
+            Analyzes every position where it&apos;s your move (~10s each, resumable) so probes
+            here become instant.
+          </p>
+        )}
+      </div>
     </Card>
   );
 }

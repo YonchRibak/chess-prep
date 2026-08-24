@@ -79,7 +79,8 @@ phased plan at [rashid-dev-plan.md](../../rashid-dev-plan.md), status detail in
 | **R0** ✅ | Measured (rashid-dev-plan.md §R0 results): ~350ms per 300k-node pv4 search, ~3s/position, MultiPV width free at fixed nodes → **in-browser precompute confirmed**, budgets 1M precompute / 300k live. Caveat: the wasm engine is classical-eval (not NNUE) — it undervalues speculative sacs, the very moves Rashid hunts |
 | **R3** ✅ | Live probe on a dedicated engine (`rashidLive.ts`, singleton-gate-aware) + cache layer B (`rashidResults`, db v5, config-keyed) + `RashidPanel` in the editor (data only, off by default) + the "why not" candidate trace |
 | **R4** ✅ | Board arrows (`rashidArrows.ts`): hue = risk band via custom brushes, thickness = reward floor, badge = length; pale runners-up capped at 2; Rashid-vs-engine arrow-mode precedence in the editor |
-| **R5–R6** | Not started — precompute, tuning |
+| **R5** ✅ | Background precompute (`rashidPrecompute.ts`): BFS-priority over hero positions on a third engine instance, pauses while drilling, resumable via the caches (no invalidation needed — they're position-keyed); live probes prefer precompute-tier entries. Progress UI in the RashidPanel |
+| **R6** | Not started — tuning pass + triviality filter (the lab's knobs and why-not trace are its instruments) |
 
 ## Parked
 

@@ -301,6 +301,21 @@ Idle-time scheduling on a dedicated low-priority engine instance; pauses on the 
 signal (C10); resumable (layer A makes re-runs cheap); invalidation hooks on
 repertoire edits (only affected subtrees); progress UI with honest coverage stats.
 
+**As built (decisions recorded 2026-08-24):**
+
+- **BFS depth order, not game-weighted coverage.** Coverage weights need explorer
+  data per node, and precompute must work fully offline (repo invariant: anything
+  explorer-shaped works with its cache cold). Depth is the offline-safe "common
+  first" proxy; explorer-weighted ordering can layer on later as a pure sort change.
+- **No invalidation hooks — they turned out to be unnecessary.** Both cache layers
+  are position-keyed, so no repertoire edit can make an entry stale; edits only
+  change the worth-computing set. Re-running after edits *is* the invalidation.
+- **Off-tree opponent deviations skipped** — the live probe covers them on demand;
+  precompute covers exactly the tree.
+- Live requests prefer precompute-tier cache entries (strictly better: 1M nodes,
+  full walk), falling back to the live tier — this is the mechanism that makes the
+  editor instant after a run.
+
 ### R6 — Tuning pass + triviality filter
 
 Curated trap-suite fixture set (real games/lines where Rashid *should* and *should

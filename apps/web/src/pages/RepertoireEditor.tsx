@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Square } from 'chess.js';
 import { fenTurn, isUserMove } from '@chess-prep/shared';
 import { useAppStore } from '../store/app.ts';
@@ -13,6 +13,10 @@ import { useEngine } from '../lib/engine/useEngine.ts';
 import { engineArrows } from '../lib/engine/arrows.ts';
 import { useRashid } from '../lib/engine/useRashid.ts';
 import { RASHID_BRUSHES, rashidShapes } from '../lib/engine/rashidArrows.ts';
+import {
+  runRashidPrecompute,
+  type RashidPrecomputeProgress,
+} from '../lib/engine/rashidPrecompute.ts';
 import type { BoardColor } from '../lib/chess/useBoard.ts';
 import { api, ApiError, type RepertoireFull, type RepertoireMove } from '../api/client.ts';
 
@@ -99,6 +103,32 @@ function Editor({ active }: { active: RepertoireFull }) {
 
   // Rashid live probe on the displayed position (R3/R4).
   const rashid = useRashid(currentFullFen, active.color === 'white' ? 'w' : 'b', rashidEnabled);
+
+  // Rashid background precompute over the whole repertoire (R5). Cancelled on
+  // unmount; safe to re-run any time — finished positions are layer-B hits.
+  const [precomputeProgress, setPrecomputeProgress] = useState<RashidPrecomputeProgress | null>(
+    null,
+  );
+  const [precomputing, setPrecomputing] = useState(false);
+  const precomputeCancel = useRef(false);
+  useEffect(
+    () => () => {
+      precomputeCancel.current = true;
+    },
+    [],
+  );
+  async function startPrecompute() {
+    precomputeCancel.current = false;
+    setPrecomputing(true);
+    try {
+      await runRashidPrecompute(active, {
+        onProgress: setPrecomputeProgress,
+        shouldCancel: () => precomputeCancel.current,
+      });
+    } finally {
+      setPrecomputing(false);
+    }
+  }
 
   // Suggested moves as board arrows (best = green, then blue / yellow).
   const engineShapes = useMemo(
@@ -337,6 +367,12 @@ function Editor({ active }: { active: RepertoireFull }) {
             state={rashid}
             enabled={rashidEnabled}
             onToggle={setRashidEnabled}
+            precompute={precomputeProgress}
+            precomputing={precomputing}
+            onStartPrecompute={() => void startPrecompute()}
+            onCancelPrecompute={() => {
+              precomputeCancel.current = true;
+            }}
           />
 
           <Card title="Position">

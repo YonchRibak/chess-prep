@@ -88,8 +88,11 @@ engine would make the panel and the walk cancel each other's searches (a superse
 `analyzeOnce` never resolves). The `rashidResults` store (db v5) keys derived results
 by `(fenKey, heroColor, engineId, nodes, rashidConfigKey)` — retuning any constant
 changes the key, so a stale derivation can never be served. Probes are serialized,
-cancellable (`RashidCancelled` is control flow, not an error), and run at
-`NODES_LIVE = 300k` with `maxPly: 4`. **Cross-instance gate rule, tested:** every
+cancellable (`RashidCancelled` is control flow, not an error), and **tiered**: a live
+request first looks for a `PRECOMPUTE_TIER` entry (1M nodes, full walk — strictly
+better), then `LIVE_TIER` (300k, `maxPly: 4`), and only computes at the live tier on
+a double miss. A custom cfg/nodes override checks only its own exact tier — a tuned
+request must never be answered from a differently-tuned entry. **Cross-instance gate rule, tested:** every
 probe checks the *singleton's* gate before starting and before every search — while
 a drill is in progress, Rashid answers nothing, even from cache, even on its own
 worker. The `RashidPanel` in the repertoire editor (below the engine panel) surfaces
@@ -110,11 +113,36 @@ while the probe toggle is on, the board's shapes belong to Rashid (a no-trap ans
 is an *empty* board); the engine's top-3 arrows return when it is off — the two arrow
 languages never mix.
 
+**R5 — background precompute**
+([rashidPrecompute.ts](../../apps/web/src/lib/engine/rashidPrecompute.ts) +
+[rashidPrecompute.test.ts](../../apps/web/src/lib/engine/rashidPrecompute.test.ts)):
+`runRashidPrecompute(repertoire)` walks the hero-to-move positions **BFS-shallowest
+first** (transpositions once; dropped and refutation subtrees excluded — the user
+never plays toward those) and runs the precompute tier on each, filling both cache
+layers so editor probes become instant. Sequential healthCheck-style loop with
+progress, cancellation, and a third engine instance (live probes stay snappy).
+Two deliberate deviations from the plan, both recorded there:
+
+- **Depth order, not game-weighted explorer order** — explorer data must never be a
+  dependency of something that has to work fully offline; depth is the offline-safe
+  "common first" proxy.
+- **No invalidation hooks** — both cache layers are keyed by *position*, so a
+  repertoire edit cannot make an entry stale; it only changes which positions are
+  worth computing. Re-running is the invalidation: old work hits layer B instantly.
+
+**Pause, not abort, while drilling:** the loop waits on the singleton's gate and
+resumes when the drill ends — the third worker is outside the gate's reach, so the
+loop enforces the no-leak rule itself. Progress UI (run/resume/stop, counts, pause
+indicator) lives in the `RashidPanel`'s precompute section.
+
 ## What is NOT built
 
-- **R5** — background precompute over the repertoire tree (which will also flip the
-  editor panel's default from off to on).
 - **R6** — tuning pass + triviality filter.
+- The editor probe toggle still defaults to **off** even after a precompute run
+  (flipping it needs a persisted per-user/per-repertoire setting — a cheap follow-up,
+  not built).
+- Off-tree opponent deviations are not precomputed — the live probe covers them on
+  demand.
 
 ## Rules for future phases
 
