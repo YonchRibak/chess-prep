@@ -8,7 +8,7 @@ card fields.
 ## IndexedDB
 
 [apps/web/src/lib/idb/schema.ts](../../apps/web/src/lib/idb/schema.ts) — database
-`chess-prep`, version 3, via `idb`. Seven object stores:
+`chess-prep`, version 4, via `idb`. Eight object stores:
 
 | Store | Key | Purpose |
 |---|---|---|
@@ -19,6 +19,7 @@ card fields.
 | `openingNames` | `fenKey` | Phase 9a: book names for the user's own positions, so `openingName` [line scopes](../03-domain/srs-drilling.md#line-scopes-phase-9a) resolve offline. Cache only — safe to clear, refills from `POST /openings/by-fens`. |
 | `drillAttempts` | attempt `id` | Phase 9d: the drill-attempt log. Indexes on `at` and `moveId`. **Not a cache** — the `mistakes` mode builds its queue from this, so it must be local. |
 | `attemptQueue` | attempt `id` | Attempts awaiting upload. |
+| `rashidRaw` | composite `rashidRawKey` | [Rashid](../03-domain/rashid.md) cache layer A — raw MultiPV engine output keyed by `(fenKey, engine build, node budget, multipv)`. A derivable artifact: never synced, safe to clear (`clearRashidRawLocal`). |
 
 Note `srsCards` is keyed by `moveId`, not card `id` — consistent with "one card per
 move".

@@ -14,6 +14,7 @@
  *   #/health/:id            → repertoire health check
  *   #/lines/:id/:intent     → line navigator (train | grow)
  *   #/prepare               → "Prepare against…" wizard (Flow F2)
+ *   #/rashid-lab            → Rashid dev harness (no nav entry; type the hash)
  *
  * Flow F2: walker hashes also accept `guided=1`, marking a guided-prepare
  * session (line-first traversal + lock-in; see WalkerSession).
@@ -89,6 +90,8 @@ export function viewToHash(v: View): string {
       return `#/lines/${v.repertoireId}/${v.intent}`;
     case 'prepare':
       return '#/prepare';
+    case 'rashid-lab':
+      return '#/rashid-lab';
   }
 }
 
@@ -135,6 +138,8 @@ export function hashToView(hash: string): View | null {
         : null;
     case 'prepare':
       return { kind: 'prepare' };
+    case 'rashid-lab':
+      return { kind: 'rashid-lab' };
     default:
       return null;
   }

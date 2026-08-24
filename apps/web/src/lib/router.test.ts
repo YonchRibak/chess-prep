@@ -44,6 +44,7 @@ describe('viewToHash / hashToView round-trip', () => {
     { kind: 'lines', repertoireId: 'abc', intent: 'train' },
     { kind: 'lines', repertoireId: 'abc', intent: 'grow' },
     { kind: 'prepare' },
+    { kind: 'rashid-lab' },
     // Flow F2: guided flag, alone and together with a scope.
     { kind: 'walker-session', repertoireId: 'abc', seed: 'build', guided: true },
     {

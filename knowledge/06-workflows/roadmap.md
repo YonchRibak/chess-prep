@@ -75,8 +75,9 @@ phased plan at [rashid-dev-plan.md](../../rashid-dev-plan.md), status detail in
 | Phase | Status |
 |---|---|
 | **R1** ✅ | Domain core in `packages/shared/src/rashid.ts` — only-move detection, lazy walk, ranking — fully unit-tested against a scripted fake engine |
-| **R0** | `nodes` engine option landed; the wasm throughput **measurement** (which picks the search budgets and decides browser-vs-script precompute) is still to run |
-| **R2–R6** | Not started — adapter + raw cache, live probe, arrows, precompute, tuning |
+| **R2** ✅ | Engine adapter (`rashidAdapter.ts`: sequential queue, gate fail-fast, engine-id capture) + cache layer A (`rashidRaw` IndexedDB store, db v4) |
+| **R0** | Harness built (`#/rashid-lab`: throughput matrix + live calibration); the **measurement itself** — which picks node budgets and decides browser-vs-script precompute — still needs a run in a real browser, numbers recorded in the plan |
+| **R3–R6** | Not started — live probe + cache layer B, arrows, precompute, tuning |
 
 ## Parked
 

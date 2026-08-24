@@ -10,6 +10,7 @@ import { WalkerSession } from './pages/WalkerSession.tsx';
 import { DailyDiet } from './pages/DailyDiet.tsx';
 import { LineNavigator } from './pages/LineNavigator.tsx';
 import { PrepareWizard } from './pages/PrepareWizard.tsx';
+import { RashidLab } from './pages/RashidLab.tsx';
 import { Btn, ErrorBanner } from './components/ui.tsx';
 import { attachOnlineFlush, flushQueue } from './lib/srs/sync.ts';
 import { useHashRouting } from './lib/router.ts';
@@ -25,6 +26,7 @@ const VIEW_LABEL: Record<string, string> = {
   'health-check': 'Health check',
   lines: 'Lines',
   prepare: 'Prepare',
+  'rashid-lab': 'Rashid lab',
 };
 
 export function App() {
@@ -90,6 +92,7 @@ export function App() {
         {view.kind === 'health-check' && <HealthCheckPage />}
         {view.kind === 'lines' && <LineNavigator intent={view.intent} />}
         {view.kind === 'prepare' && <PrepareWizard />}
+        {view.kind === 'rashid-lab' && <RashidLab />}
       </main>
 
       {error && <ErrorBanner message={error} onClose={clearError} />}

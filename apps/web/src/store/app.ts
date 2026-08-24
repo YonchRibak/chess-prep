@@ -40,7 +40,9 @@ export type View =
   // session-scoped walker session.
   | { kind: 'lines'; repertoireId: string; intent: 'train' | 'grow' }
   // Flow F2: the "Prepare against…" wizard.
-  | { kind: 'prepare' };
+  | { kind: 'prepare' }
+  // Rashid dev harness — R0 throughput measurement + live calibration runs.
+  | { kind: 'rashid-lab' };
 
 interface AppStore {
   view: View;

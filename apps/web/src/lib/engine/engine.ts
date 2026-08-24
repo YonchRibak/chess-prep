@@ -69,6 +69,10 @@ export class Engine {
 
   private currentFen: string | null = null;
   private currentMultipv = 1;
+  /** From the UCI `id name …` handshake line. Part of the Rashid raw-cache
+   * key (rashid-dev-plan.md §C2): results from different engine builds must
+   * never share a cache entry. */
+  private engineName = 'unknown-engine';
   private linesByMultipv = new Map<number, EngineLine>();
   private currentDepth = 0;
   private analysisGen = 0;
@@ -207,6 +211,11 @@ export class Engine {
     return this.gated;
   }
 
+  /** Engine build identifier (UCI `id name`), e.g. "Stockfish 16". */
+  getEngineId(): string {
+    return this.engineName;
+  }
+
   /** Run an analysis to completion and resolve with the final progress. */
   analyzeOnce(fen: string, opts: AnalyzeOptions = {}): Promise<AnalysisProgress> {
     return new Promise<AnalysisProgress>((resolve) => {
@@ -244,6 +253,10 @@ export class Engine {
   }
 
   private onLine(line: string): void {
+    if (line.startsWith('id name ')) {
+      this.engineName = line.slice('id name '.length).trim();
+      return;
+    }
     // UCI handshake replies.
     if (line === 'uciok') {
       this.uciOkResolve?.();

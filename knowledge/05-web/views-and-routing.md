@@ -49,6 +49,7 @@ the union, `viewToHash`, `hashToView`, and the `App` switch.
 | `health-check` | [HealthCheck.tsx](../../apps/web/src/pages/HealthCheck.tsx) |
 | `lines` | [LineNavigator.tsx](../../apps/web/src/pages/LineNavigator.tsx) — Flow F1: per-line due/toBuild badges; each row starts a session-scoped walker session |
 | `prepare` | [PrepareWizard.tsx](../../apps/web/src/pages/PrepareWizard.tsx) — Flow F2: search target → infer color → extend/create (fenKey match decides) → prep target → launch a guided session. Commits the stem *before* launching, because a scoped build can't start a line that doesn't exist |
+| `rashid-lab` | [RashidLab.tsx](../../apps/web/src/pages/RashidLab.tsx) — [Rashid](../03-domain/rashid.md) dev harness: R0 throughput measurement + live calibration runs. No nav entry; reach it by typing the hash |
 
 ## Hash routing
 
@@ -66,6 +67,7 @@ and syncs both directions.
 #/health/:id           health check
 #/lines/:id/:intent    line navigator (intent ∈ train|grow)
 #/prepare              Prepare wizard (Flow F2)
+#/rashid-lab           Rashid dev harness
 ```
 
 Walker hashes also accept `guided=1` (`#/walker/:id/build?guided=1&scope=…`) —

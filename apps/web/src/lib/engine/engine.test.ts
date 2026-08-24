@@ -70,6 +70,15 @@ describe('Engine.analyze go-command selection', () => {
   });
 });
 
+describe('Engine.getEngineId', () => {
+  it('captures the UCI `id name` line (Rashid cache-key component)', () => {
+    const { engine } = engineWithStub();
+    expect(engine.getEngineId()).toBe('unknown-engine');
+    (engine as unknown as { onLine(l: string): void }).onLine('id name Stockfish 16.1 WASM');
+    expect(engine.getEngineId()).toBe('Stockfish 16.1 WASM');
+  });
+});
+
 describe('Engine.setGated (Phase 8b)', () => {
   it('analyze() becomes a no-op when gated AND still sends `stop` to cancel anything in flight', () => {
     const engine = new Engine();

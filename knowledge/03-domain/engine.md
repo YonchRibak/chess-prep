@@ -27,6 +27,10 @@ their results cacheable under a stable key. Precedence: `movetime` > `nodes` > `
 `parseInfo(line)` turns a UCI `info` line into an `EngineLine`; subscribe with
 `onProgress(fn)`.
 
+The UCI `id name` reply is captured and exposed as `getEngineId()` — it is a component
+of the [Rashid](rashid.md) raw-cache key, so results from different engine builds never
+share an entry.
+
 Helpers: `whiteCp(line, turn)` normalizes scores to White's perspective — engine scores
 are from the side to move, so this matters for the eval bar — and `formatEval(line)`
 renders cp/mate for display.

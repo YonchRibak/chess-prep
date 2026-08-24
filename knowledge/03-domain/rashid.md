@@ -11,7 +11,7 @@ consecutive **only-moves**, and scores the line as **Risk** (outcome under perfe
 defense), **Reward** (floor/max punishment when they slip), and **Length** (pinch-point
 count). A board arrow encodes all three.
 
-## What is built (plan Phase R1 + R0 groundwork)
+## What is built (plan Phases R1 + R2, R0 harness)
 
 The **pure domain core** in `packages/shared` — engine injected as a single async
 `RashidAnalyzeFn(fen, multipv)`, which is why every branch is unit-testable against a
@@ -29,7 +29,32 @@ scripted fake:
 
 Plus `AnalyzeOptions.nodes` on the [engine](engine.md) (`go nodes N`) — node-limited
 single-threaded searches are reproducible, which depth-limited ones are not; that
-reproducibility is what will make results cacheable (plan §C2).
+reproducibility is what makes results cacheable (plan §C2).
+
+**R2 — the adapter and cache layer A**
+([rashidAdapter.ts](../../apps/web/src/lib/engine/rashidAdapter.ts) +
+[rashidAdapter.test.ts](../../apps/web/src/lib/engine/rashidAdapter.test.ts)):
+`createRashidAnalyzeFn({nodes})` wraps the real `Engine` behind the domain core's
+injected interface, with
+
+- a **sequential queue** (`Engine.analyze` cancels in-flight work, so interleaved
+  callers would eat each other's searches);
+- **gate fail-fast**: a gated engine is refused with a thrown error *before* init —
+  `analyzeOnce` on a gated engine would hang forever, and the check runs again after
+  every await in case the gate closed mid-call;
+- **cache layer A** — the `rashidRaw` IndexedDB store
+  ([idb/schema.ts](../../apps/web/src/lib/idb/schema.ts), db v4), keyed by
+  `rashidRawKey(fenKey, engineId, nodes, multipv)`. The engine id comes from the UCI
+  `id name` line (`Engine.getEngineId()`). A cache hit with a supplied `engineId`
+  resolves **without touching the engine at all** — cached positions keep working even
+  if wasm fails to boot offline. Side-to-move POV, hero- and config-independent.
+
+**R0 harness** — [RashidLab.tsx](../../apps/web/src/pages/RashidLab.tsx) at
+`#/rashid-lab` (no nav entry; type the hash): times real searches across node budgets
+and MultiPV widths (cache off), projects per-position cost via the plan-C1 arithmetic
+(1×pv8 + 6×pv4 + 2×pv1), and runs live `rashidAnalyze` on any FEN through the real
+adapter. The measured numbers should be recorded in the plan when the R0 decision is
+made.
 
 ### Invariants the tests pin down
 
@@ -47,16 +72,14 @@ reproducibility is what will make results cacheable (plan §C2).
 
 ## What is NOT built
 
-Everything else — an agent should assume no wiring exists outside `packages/shared`:
-
-- **R2** — web adapter (perspective mapping at the UCI boundary, sequential queue,
-  gate fail-fast) and the raw-analysis IndexedDB cache layer.
-- **R3** — live probe in the editor.
-- **R4** — arrows/badges (quantized brush matrix; see plan §C9).
+- **R3** — live probe in the editor, and cache layer B (derived `RashidResult`s keyed
+  by `rashidConfigKey`). The lab page recomputes the derivation on every run.
+- **R4** — arrows/badges (quantized brush matrix; see plan §C9). No product surface
+  shows Rashid anywhere yet — the lab is a dev harness.
 - **R5** — background precompute over the repertoire tree.
 - **R6** — tuning pass + triviality filter.
-- **R0's measurement half** — wasm throughput numbers to pick node budgets. The
-  `nodes` option exists; nothing has been measured yet.
+- **R0's decision** — the harness exists but the numbers haven't been run/recorded;
+  budgets (`300k` nodes etc.) are placeholders until then.
 
 ## Rules for future phases
 
@@ -65,9 +88,7 @@ Everything else — an agent should assume no wiring exists outside `packages/sh
   precompute `Engine` would bypass it; precompute must pause on the same "drilling
   now" signal that gates the main engine, because the no-leak guarantee is about
   worker chatter, not panels ([engine.md](engine.md), plan §C10).
-- **Adapter must not `await` a gated engine** — `analyzeOnce()` hangs forever while
-  gated (`analyze` no-ops, `done` never fires); check `isGated()` and fail fast.
-- **Two-layer cache** (plan §C7): raw MultiPV output keyed by
-  `(fenKey, engineBuild, nodes, multipv)`; derived `RashidResult` keyed by
-  `(fenKey, heroColor, rashidConfigKey)`. Never weld engine work to tuning constants.
+- **Cache layer B** (R3) keys by `(fenKey, heroColor, rashidConfigKey)` — never weld
+  derived results to anything less than the full config, and never store them in
+  layer A.
 - Caches are derivable artifacts: **client-side only, never synced** to the API.
