@@ -49,12 +49,16 @@ injected interface, with
   resolves **without touching the engine at all** — cached positions keep working even
   if wasm fails to boot offline. Side-to-move POV, hero- and config-independent.
 
-**R0 harness** — [RashidLab.tsx](../../apps/web/src/pages/RashidLab.tsx) at
+**R0 harness + decision** — [RashidLab.tsx](../../apps/web/src/pages/RashidLab.tsx) at
 `#/rashid-lab` (no nav entry; type the hash): times real searches across node budgets
 and MultiPV widths (cache off), projects per-position cost via the plan-C1 arithmetic
 (1×pv8 + 6×pv4 + 2×pv1), and runs live `rashidAnalyze` on any FEN through the real
-adapter. The measured numbers should be recorded in the plan when the R0 decision is
-made.
+adapter. **Measured and decided** (numbers in the plan's R0 section): ~3s/position at
+300k nodes → in-browser precompute confirmed; budgets 1M (precompute) / 300k (live).
+Two findings that shape later phases: MultiPV width is time-free at fixed nodes (the
+budget is split across lines — width wants *more* nodes, not fewer), and the bundled
+wasm engine is **classical eval, not NNUE**, which undervalues speculative sacrifices
+— the quality risk logged for R6.
 
 ### Invariants the tests pin down
 
@@ -78,8 +82,6 @@ made.
   shows Rashid anywhere yet — the lab is a dev harness.
 - **R5** — background precompute over the repertoire tree.
 - **R6** — tuning pass + triviality filter.
-- **R0's decision** — the harness exists but the numbers haven't been run/recorded;
-  budgets (`300k` nodes etc.) are placeholders until then.
 
 ## Rules for future phases
 

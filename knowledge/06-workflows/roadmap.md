@@ -76,7 +76,7 @@ phased plan at [rashid-dev-plan.md](../../rashid-dev-plan.md), status detail in
 |---|---|
 | **R1** ✅ | Domain core in `packages/shared/src/rashid.ts` — only-move detection, lazy walk, ranking — fully unit-tested against a scripted fake engine |
 | **R2** ✅ | Engine adapter (`rashidAdapter.ts`: sequential queue, gate fail-fast, engine-id capture) + cache layer A (`rashidRaw` IndexedDB store, db v4) |
-| **R0** | Harness built (`#/rashid-lab`: throughput matrix + live calibration); the **measurement itself** — which picks node budgets and decides browser-vs-script precompute — still needs a run in a real browser, numbers recorded in the plan |
+| **R0** ✅ | Measured (rashid-dev-plan.md §R0 results): ~350ms per 300k-node pv4 search, ~3s/position, MultiPV width free at fixed nodes → **in-browser precompute confirmed**, budgets 1M precompute / 300k live. Caveat: the wasm engine is classical-eval (not NNUE) — it undervalues speculative sacs, the very moves Rashid hunts |
 | **R3–R6** | Not started — live probe + cache layer B, arrows, precompute, tuning |
 
 ## Parked

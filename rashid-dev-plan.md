@@ -228,6 +228,35 @@ estimate of minutes-per-position and hours-per-repertoire — or a decision to m
 precompute to a node-side script (explorer-snapshot precedent) if in-browser numbers
 are untenable. Numbers recorded in the plan/knowledge, not in a chat scrollback.
 
+**Results (measured 2026-08-24, dev machine, `Stockfish SF_classical 64 POPCNT` wasm,
+via the `#/rashid-lab` harness):**
+
+| Search | ms |
+|---|---|
+| 100k nodes, pv4 | ~145–150 (overhead-dominated — all three positions identical) |
+| 300k nodes, pv4 | ~330–370 |
+| 1M nodes, pv4 | ~1,080–1,165 |
+| 300k nodes, pv1 / pv8 (middlegame) | 304 / 309 |
+
+- Cost is ~linear in nodes and **flat in MultiPV width** — a `go nodes N` budget is
+  shared across lines, so widening the root to pv8 is free in *time* but splits the
+  same nodes across more lines. Width therefore wants a **higher** node budget, not a
+  lower one; the C1.3 "narrow the interior MultiPV to save time" lever is worthless
+  and the lever that matters is nodes.
+- Projected per-position cost at 300k (1×pv8 + 6×pv4 + 2×pv1): **~3.1s** → ~0.3h per
+  300-position repertoire.
+
+**Decision:** in-browser precompute wins outright — no node-side script needed.
+Budgets: `NODES_PRECOMPUTE = 1_000_000` (~10s/position, ~0.8h per 300 positions;
+time is cheap, eval quality is the scarce resource), `NODES_LIVE = 300_000`.
+
+**Quality caveat discovered:** the bundled wasm engine is **classical eval, not
+NNUE**. Classical eval systematically misjudges the compensation in speculative
+sacrifices — exactly the moves Rashid exists to find (confirmed on Botvinnik–Tal
+1960 game 6: Tal's 21…Nf4!? is prefiltered as simply losing material). Nodes are the
+available lever; swapping in an NNUE wasm build is the larger, product-wide upgrade
+to reach for if detection quality disappoints in R6.
+
 ### R1 — Domain core in shared (no real engine)
 
 `rashid.ts`: sentinel scheme, `wp()`, only-move detector (§3 + C4 forced-move rule +
