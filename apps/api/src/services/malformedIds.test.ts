@@ -83,6 +83,10 @@ describe('malformed ids on resource paths → 404, not 500', () => {
       ],
       ['patchMove', (id) => svc.patchMove(DEFAULT_USER_ID, id, id, { priority: 1 })],
       ['deleteMove', (id) => svc.deleteMove(DEFAULT_USER_ID, id, id)],
+      [
+        'updateStudy',
+        async (id) => (await import('./studies.js')).updateStudy(DEFAULT_USER_ID, id, { pgn: '1. e4 *' }),
+      ],
     ];
 
     for (const [name, call] of byId) {

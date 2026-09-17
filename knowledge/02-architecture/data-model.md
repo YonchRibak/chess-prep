@@ -4,7 +4,7 @@ Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
 `0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`,
 `0007_auto_expand`, `0008_drill_attempts`, `0009_refutations`,
-`0010_explorer_snapshot`.
+`0010_explorer_snapshot`, `0011_study_source`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -20,6 +20,12 @@ trees**, not linear lines.
 because it writes moves without asking; see [walker](../03-domain/walker.md#auto-expansion-phase-9c)),
 timestamps, plus a denormalized root: `root_fen_key` / `root_full_fen` so the client
 knows where the tree starts without a query.
+
+`source` (migration `0011`, Study S2) is nullable jsonb holding a
+[`RepertoireSource`](../../packages/shared/src/study.ts) when the tree came from a
+lichess study (study name/url, chapter list, SHA-256 of the imported PGN, `importedAt`).
+`null` means hand-built, and **the study update endpoint refuses those** — a re-import
+can never overwrite a tree the user authored by hand. See [study](../03-domain/study.md).
 
 `drill_rules` is a partial [`DrillRules`](../../packages/shared/src/drill.ts); always
 read it through `mergeDrillRules()` rather than assuming fields exist.
@@ -135,6 +141,13 @@ column, deferred to the v2 `option_label` work.
 **Changing a prep move** (swap) deletes the old user-side `Move` — cascade removes its
 `SrsCard` — and inserts the new one. The new card starts at FSRS `state='new'`; SRS
 history is **not** preserved through a swap in v1.
+
+**On a study repertoire, the PGN owns hero-side `is_dropped`.** The import policy
+parks the hero's extra alternates as dropped; every re-import re-applies that from the
+PGN, while opponent-side drops (the user's own "won't cover") are kept. Because a
+demoted alternate is an ordinary dropped edge, `patchMove`'s undrop path runs
+`enforceOnePrepPerUserPosition` for hero-side moves — otherwise one click in the tree
+would put two live prep moves at a position and both would be drilled and carded.
 
 **Coverage is derived, never stored.** There is no `covered` column. Any position whose
 live outgoing move set is empty is uncovered; the walker computes it.

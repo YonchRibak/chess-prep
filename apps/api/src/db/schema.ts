@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { RepertoireSource } from '@chess-prep/shared';
 import {
   boolean,
   doublePrecision,
@@ -37,6 +38,12 @@ export const repertoires = pgTable('repertoires', {
   // asking — acceptable only where the user has said so. It never re-adds a
   // dropped branch; `is_dropped` is a standing "won't cover" instruction.
   autoExpand: boolean('auto_expand').notNull().default(false),
+  // Study S2: provenance for a repertoire imported from a lichess study
+  // (`RepertoireSource` in shared). Null on hand-built repertoires — and the
+  // study *update* endpoint refuses those, so a re-import can never overwrite
+  // a tree the user built by hand. jsonb because it is read and written
+  // whole and its shape (chapter list, hashes) is expected to grow.
+  source: jsonb('source').$type<RepertoireSource | null>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

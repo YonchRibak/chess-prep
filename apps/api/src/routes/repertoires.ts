@@ -17,6 +17,7 @@ import {
   patchMove,
   patchRepertoire,
 } from '../services/repertoires.js';
+import { importStudy, updateStudy } from '../services/studies.js';
 
 export const repertoireRoutes = new Hono();
 
@@ -129,6 +130,24 @@ repertoireRoutes.post('/import', async (c) => {
   const result = await safeJson(() => importPgn(userId(), body));
   if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404 | 500);
   return c.json(result.data, 201);
+});
+
+// Study S2. Distinct from `/import` (which always creates and takes a raw
+// game) so the study rules — chapters as tags, hero prep policy, provenance,
+// and an *update* path — never leak into the legacy importer.
+repertoireRoutes.post('/import-study', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const result = await safeJson(() => importStudy(userId(), body));
+  if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404 | 500);
+  return c.json(result.data, 201);
+});
+
+repertoireRoutes.post('/:id/import-study', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const result = await safeJson(() => updateStudy(userId(), id, body));
+  if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404 | 500);
+  return c.json(result.data);
 });
 
 repertoireRoutes.patch('/:id/drill-rules', async (c) => {

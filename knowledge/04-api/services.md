@@ -27,10 +27,10 @@ The largest and most careful file. Key shapes:
 | `addMove` | Single move. See the flow below |
 | `appendLine` | Batch, idempotent, transactional. See below |
 | `appendRefutation` | Phase 9d shadow line: same walk, **no cards, no prep-slot check**. See below |
-| `patchMove` | comment / annotation / isMainLine / priority / **isDropped** |
+| `patchMove` | comment / annotation / isMainLine / priority / **isDropped**. Undropping a hero-side edge runs the one-prep check (Study S2 — demoted alternates are dropped edges) |
 | `deleteMove` | Cascades to the move's SRS card |
 | `deleteAllRepertoires` | Bulk wipe — one statement, see below |
-| `importPgn` / `exportPgn` | Via `pgnToTree` / `treeToPgn` from shared. Study imports (multi-chapter, prep policy) will use `studyPgnToTree` — see [study](../03-domain/study.md); the service side is not built yet |
+| `importPgn` / `exportPgn` | Via `pgnToTree` / `treeToPgn` from shared. Legacy single-game import: always creates, no update path. Study imports live in `studies.ts` below |
 | `patchDrillRules` | Merges partial `DrillRules` |
 | `enforceOnePrepPerUserPosition` | The invariant guard — see below |
 | `isUuid` / `ensureIdFound` | Id-shape validation at the boundary — see below |
@@ -200,3 +200,38 @@ Single Drizzle client, `postgres-js` pool with `max: 10`
 ([db/client.ts](../../apps/api/src/db/client.ts)). Migrations run via
 [db/migrate.ts](../../apps/api/src/db/migrate.ts) (`pnpm db:migrate`), which also seeds
 the `DEFAULT_USER_ID` user row.
+
+## studies.ts
+
+Study S2 — [studies.ts](../../apps/api/src/services/studies.ts). `importStudy` creates a
+repertoire from a lichess study export (via `studyPgnToTree` in shared, see
+[study](../03-domain/study.md)) and stamps `repertoires.source`; `updateStudy` re-syncs
+an existing study repertoire from a newer export. Both return
+`{ repertoire, summary: StudySyncSummary }`.
+
+### `syncRepertoireFromTree` — a diff, not a reload
+
+The whole reason this is not "delete and re-run `importPgn`": **SRS history lives on
+move rows**. A reload would give every card a new id and reset every due date. So, in
+one transaction:
+
+1. Positions: insert the fenKeys the tree has and the table lacks.
+2. Moves, matched on `(parent_position_id, san)`:
+   - present in both → update only the fields that differ (comment, annotation,
+     isMainLine, uci, lineTags, isDropped); a shadow (`is_refutation`) edge the study
+     now contains is promoted to prep, same rule as `promoteIfShadowed`;
+   - only in the tree → bulk insert;
+   - only in the table → delete (cards and attempts cascade) **unless it is a
+     refutation shadow line**, which is user data the study cannot know about.
+3. Positions the tree no longer has are deleted unless a surviving shadow line still
+   stands on them.
+4. Cards: eligible = hero-turn parent ∧ not dropped ∧ not refutation ∧ parent in
+   `liveReachablePositions(tree)`. Inserted with `onConflictDoNothing`, so an existing
+   card is *kept* (`cardsKept`) and only new ones count as `cardsCreated`. Cards on a
+   move that just got demoted are kept too — the schema's standing policy for dropped
+   user-side moves.
+
+Two asymmetries, both deliberate: hero-side `is_dropped` comes from the PGN (the prep
+policy must be allowed to move the slot), opponent-side `is_dropped` is kept (a manual
+"won't cover" the study cannot express). Bulk statements are chunked at 500 rows to stay
+under Postgres's bind-parameter cap on large studies.

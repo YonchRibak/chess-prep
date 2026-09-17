@@ -15,6 +15,7 @@ import {
   type Color,
   type DrillRules,
   type FenKey,
+  type RepertoireSource,
   type RepertoireTree,
   type TreeMoveInput,
 } from '@chess-prep/shared';
@@ -38,6 +39,8 @@ export interface RepertoireSummary {
   drillRules: DrillRules;
   /** Phase 9c: silently auto-expand opponent replies while building. */
   autoExpand: boolean;
+  /** Study S2: set when the tree came from a lichess study; null when hand-built. */
+  source: RepertoireSource | null;
   rootFenKey: string;
   rootFullFen: string;
   createdAt: string;
@@ -66,14 +69,14 @@ export interface RepertoireFull extends RepertoireSummary {
 
 const ALLOWED_COLORS: ReadonlySet<Color> = new Set(['white', 'black']);
 
-function ensureColor(c: unknown): Color {
+export function ensureColor(c: unknown): Color {
   if (typeof c !== 'string' || !ALLOWED_COLORS.has(c as Color)) {
     throw new HttpError(400, 'color must be "white" or "black"');
   }
   return c as Color;
 }
 
-function ensureNonEmptyName(name: unknown): string {
+export function ensureNonEmptyName(name: unknown): string {
   if (typeof name !== 'string' || name.trim().length === 0) {
     throw new HttpError(400, 'name is required');
   }
@@ -93,7 +96,7 @@ function ensureNonEmptyName(name: unknown): string {
  * bodies see `isUuid` — a malformed filter is a bad request, not a missing
  * thing.
  */
-function ensureIdFound(value: string, what: string): void {
+export function ensureIdFound(value: string, what: string): void {
   if (!isUuid(value)) throw new HttpError(404, `${what} not found`);
 }
 
@@ -615,6 +618,19 @@ export async function patchMove(
 
   if (Object.keys(update).length === 0 && newTags === undefined) return;
   await db.transaction(async (tx) => {
+    // Undropping a hero-side edge re-enters the one-prep slot. Study imports
+    // (S2) park the hero's demoted alternates as dropped, so without this
+    // check a click in the tree could quietly put two live prep moves at one
+    // position — the walker would then drill both and the queue builders
+    // would card both.
+    if (update.isDropped === false && move.isDropped) {
+      const parent = await tx.query.positions.findFirst({
+        where: eq(positions.id, move.parentPositionId),
+      });
+      if (parent && isUserMove(fenTurn(parent.fullFen), rep.color as Color)) {
+        await enforceOnePrepPerUserPosition(tx, repertoireId, move.parentPositionId, move.san, 'refuse');
+      }
+    }
     if (Object.keys(update).length > 0) {
       await tx.update(moves).set(update).where(eq(moves.id, moveId));
     }
@@ -823,7 +839,7 @@ export async function exportPgn(userId: string, repertoireId: string): Promise<s
 
 /* ---------------- helpers ---------------- */
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 type OnConflict = 'refuse' | 'swap';
 
@@ -1137,7 +1153,7 @@ async function appendLineCore(
   return { added, reused, finalFenKey: cursorFenKey };
 }
 
-async function getRepertoireWithTx(tx: Tx, userId: string, id: string): Promise<RepertoireFull> {
+export async function getRepertoireWithTx(tx: Tx, userId: string, id: string): Promise<RepertoireFull> {
   const rep = await tx.query.repertoires.findFirst({
     where: and(eq(repertoires.id, id), eq(repertoires.userId, userId)),
   });
@@ -1174,6 +1190,7 @@ function toSummary(r: {
   tags: string[];
   drillRules: unknown;
   autoExpand: boolean;
+  source?: unknown;
   rootFenKey: string;
   rootFullFen: string;
   createdAt: Date;
@@ -1186,6 +1203,10 @@ function toSummary(r: {
     tags: r.tags,
     drillRules: (r.drillRules && typeof r.drillRules === 'object' ? r.drillRules : {}) as DrillRules,
     autoExpand: r.autoExpand,
+    source:
+      r.source && typeof r.source === 'object' && (r.source as RepertoireSource).kind === 'lichess-study'
+        ? (r.source as RepertoireSource)
+        : null,
     rootFenKey: r.rootFenKey,
     rootFullFen: r.rootFullFen,
     createdAt: r.createdAt.toISOString(),

@@ -11,7 +11,7 @@ Status by phase:
 | Phase | What | Status |
 |---|---|---|
 | **S1** | Shared parsing + prep policy ([study.ts](../../packages/shared/src/study.ts)) | ✅ built |
-| **S2** | API: `repertoires.source` provenance + upsert sync endpoints | not built |
+| **S2** | API: `repertoires.source` provenance + upsert sync endpoints ([studies.ts](../../apps/api/src/services/studies.ts)) | ✅ built |
 | **S3** | Web: Studies home as the default landing, upload/update modal, note-on-miss pause in all three drill implementations | not built |
 | **S4** | Web: study browser view (tree + toggleable engine + Rashid) and the background Rashid scan with findings | not built |
 
@@ -74,7 +74,14 @@ door open.
   added/updated/removed, cards created vs kept (SRS history preserved), the demotion
   list, and how many user-authored refutation shadow lines the sync left alone.
 
+## API (S2)
+
+`POST /repertoires/import-study` and `POST /repertoires/:id/import-study` — see
+[endpoints](../04-api/endpoints.md) and the diff algorithm in
+[services](../04-api/services.md#studiests). The column is `repertoires.source`
+([data-model](../02-architecture/data-model.md#repertoires)).
+
 ## Not built yet
 
-Everything from S2 on. In particular there is **no** update path, no `source`
-column, no note pause, and no study browser — only the pure parsing layer exists.
+S3 and S4: no Studies home, no upload modal, no note-on-miss pause, no study browser,
+no Rashid scan. The web client does not call the study endpoints yet.
