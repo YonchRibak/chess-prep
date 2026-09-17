@@ -147,6 +147,15 @@ no manual reveal pane, keeping cards flowing.
 shows the correct move, takes it back, and requires the user to *physically play it*
 before advancing.
 
+**Note on a miss** (Study S3, all three implementations): if the correct move carries a
+`comment` — in a study repertoire, the user's own annotation — the miss flow inserts a
+`note` stage between reveal and retry: the board locks and
+[StudyNote](../../apps/web/src/components/StudyNote.tsx) shows the text until it is
+dismissed (Continue, ↵ or Space). Only then does the retry start. The note is shown on
+misses only, never before the answer: classic drill used to render the comment during
+the prompt, which spoiled the card, and now shows it only after a correct answer. This
+applies to any repertoire with comments, not just study-sourced ones.
+
 ## Daily diet
 
 [pages/DailyDiet.tsx](../../apps/web/src/pages/DailyDiet.tsx) ·

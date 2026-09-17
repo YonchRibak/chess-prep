@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAppStore } from './store/app.ts';
 import { RepertoireList } from './pages/RepertoireList.tsx';
+import { StudiesHome } from './pages/StudiesHome.tsx';
 import { RepertoireEditor } from './pages/RepertoireEditor.tsx';
 import { DrillSetup } from './pages/DrillSetup.tsx';
 import { DrillSession } from './pages/DrillSession.tsx';
@@ -16,6 +17,7 @@ import { attachOnlineFlush, flushQueue } from './lib/srs/sync.ts';
 import { useHashRouting } from './lib/router.ts';
 
 const VIEW_LABEL: Record<string, string> = {
+  studies: 'Studies',
   list: 'Repertoires',
   browse: 'Browse openings',
   editor: 'Editor',
@@ -53,6 +55,14 @@ export function App() {
         <div className="flex items-baseline gap-4">
           <h1 className="text-2xl font-semibold">Chess Prep</h1>
           <nav className="flex gap-1 text-xs">
+            {/* Study S3: Studies is the landing; hand-built repertoires keep
+                their own page. Nav = Studies · Repertoires · Today · Prepare. */}
+            <Btn
+              variant={view.kind === 'studies' ? 'primary' : 'ghost'}
+              onClick={() => go({ kind: 'studies' })}
+            >
+              Studies
+            </Btn>
             <Btn
               variant={view.kind === 'list' ? 'primary' : 'ghost'}
               onClick={() => go({ kind: 'list' })}
@@ -80,6 +90,7 @@ export function App() {
       </header>
 
       <main className="w-full flex flex-col items-center">
+        {view.kind === 'studies' && <StudiesHome />}
         {view.kind === 'list' && <RepertoireList />}
         {view.kind === 'browse' && <BrowseOpenings />}
         {view.kind === 'editor' && <RepertoireEditor />}

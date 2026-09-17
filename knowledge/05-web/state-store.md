@@ -29,9 +29,10 @@ interface AppStore {
 
 | Group | Actions |
 |---|---|
-| Navigation | `go(view)` — also clears `active` when landing on `list` |
+| Navigation | `go(view)` — also clears `active` when landing on `studies` or `list`. Initial view is `studies` (Study S3) |
 | Loading | `loadList()`, `loadRepertoire(id)` (loads **without** changing the view — for the router / deep links), `openRepertoire(id)` (load + navigate), `reloadActive()` |
 | Repertoire CRUD | `createRepertoire({ name, color, tags?, seedSans? })`, `importPgn({ name, color, pgn, tags? })`, `renameRepertoire`, `deleteRepertoire`, `deleteAllRepertoires()`, `exportPgn(id)`, `patchDrillRules(id, rules)`, `setAutoExpand(id, on)` |
+| Studies (S3) | `importStudy({ pgn, color, name?, tags? }) → { id, summary }`, `updateStudy(id, pgn) → summary`. Both write the returned `RepertoireFull` straight into IndexedDB (and into `active` if it is loaded) — the response *is* the fresh snapshot, so an offline rehearsal right after an update drills the new tree |
 
 `deleteRepertoire` and `deleteAllRepertoires` both call the server **first** and touch
 IndexedDB only after it succeeds — a failed request must leave the offline copy still

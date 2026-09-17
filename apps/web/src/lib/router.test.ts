@@ -11,6 +11,7 @@ import type { View } from '../store/app.ts';
 
 describe('viewToHash / hashToView round-trip', () => {
   const views: View[] = [
+    { kind: 'studies' },
     { kind: 'list' },
     { kind: 'browse' },
     { kind: 'daily' },
@@ -110,9 +111,12 @@ describe('hashToView — plain paths unchanged', () => {
     });
   });
 
-  it('root hash is the list', () => {
-    expect(hashToView('#/')).toEqual({ kind: 'list' });
-    expect(hashToView('')).toEqual({ kind: 'list' });
+  it('root hash is the studies home; the repertoire list moved to #/repertoires', () => {
+    expect(hashToView('#/')).toEqual({ kind: 'studies' });
+    expect(hashToView('')).toEqual({ kind: 'studies' });
+    expect(hashToView('#/studies')).toEqual({ kind: 'studies' });
+    expect(hashToView('#/repertoires')).toEqual({ kind: 'list' });
+    expect(viewToHash({ kind: 'list' })).toBe('#/repertoires');
   });
 
   it("guided is only true for guided=1 — anything else parses as un-guided", () => {

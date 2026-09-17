@@ -65,6 +65,22 @@ is weak rather than uniformly. Nothing is built for it; the log it would read
 not new plumbing. Design note in
 [repertoire-growth](../03-domain/repertoire-growth.md#mistake-rehearsal).
 
+## Study flow (S1–S4)
+
+Preparation moves to lichess studies; the app rehearses them. Detail in
+[study](../03-domain/study.md).
+
+| Phase | Status | What it is |
+|---|---|---|
+| **S1** ✅ | Shared parsing (`study.ts`): chapters → line tags, main-line-only hero prep policy with demoted alternates, live reachability |
+| **S2** ✅ | API: `repertoires.source` (migration `0011`), `POST /repertoires/import-study` + `POST /repertoires/:id/import-study` — a diff-based re-sync that keeps SRS history |
+| **S3** ✅ | Web: Studies home as the default landing (`#/`; repertoire list → `#/repertoires`), upload/update modal with the sync summary, note-on-miss pause in all three drill implementations |
+| **S4** | Not started — study browser view (tree + toggleable engine + Rashid on a position) and the background Rashid scan across a study with a findings list |
+
+Debt introduced: whole-study export is still single-game (`exportPgn` unchanged), and
+demoted alternates share `is_dropped` with the user's own drops (see study.md for the
+`prep_role` escape hatch).
+
 ## In progress — Rashid (trap-finding layer)
 
 An analysis layer that finds moves forcing the opponent onto a chain of "only moves"

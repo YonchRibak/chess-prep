@@ -33,8 +33,12 @@ See [the walker](../03-domain/walker.md) for mechanics.
 ## The flow — intents, not mechanisms (Flow F1–F4)
 
 The UI is organized around what the user sits down to *do*, not around the machinery
-(see [FLOW_PROPOSAL.md](../../FLOW_PROPOSAL.md)). The home screen offers three verbs
-and the nav is *Repertoires · Today · Prepare*:
+(see [FLOW_PROPOSAL.md](../../FLOW_PROPOSAL.md)). The nav is *Studies · Repertoires ·
+Today · Prepare*, and **Studies is the landing** (Study S3): preparation happens in a
+lichess study, this app rehearses it — upload the export, rehearse it (whole study or
+one chapter), re-upload when it changes, and read your own notes when you miss. See
+[study](../03-domain/study.md). The hand-built repertoire home below moved to
+`#/repertoires` and offers three verbs:
 
 - **Today** — the daily mixed diet, unchanged.
 - **Prepare against…** — the guided flow: name an opening, the app plays the common

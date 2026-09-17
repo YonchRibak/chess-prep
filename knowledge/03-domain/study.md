@@ -12,7 +12,7 @@ Status by phase:
 |---|---|---|
 | **S1** | Shared parsing + prep policy ([study.ts](../../packages/shared/src/study.ts)) | ✅ built |
 | **S2** | API: `repertoires.source` provenance + upsert sync endpoints ([studies.ts](../../apps/api/src/services/studies.ts)) | ✅ built |
-| **S3** | Web: Studies home as the default landing, upload/update modal, note-on-miss pause in all three drill implementations | not built |
+| **S3** | Web: Studies home as the default landing, upload/update modal, note-on-miss pause in all three drill implementations | ✅ built |
 | **S4** | Web: study browser view (tree + toggleable engine + Rashid) and the background Rashid scan with findings | not built |
 
 ## Parsing — [study.ts](../../packages/shared/src/study.ts)
@@ -81,7 +81,23 @@ door open.
 [services](../04-api/services.md#studiests). The column is `repertoires.source`
 ([data-model](../02-architecture/data-model.md#repertoires)).
 
+## Web (S3)
+
+- **Landing**: `#/` is [StudiesHome](../../apps/web/src/pages/StudiesHome.tsx); the
+  hand-built list moved to `#/repertoires`
+  ([views](../05-web/views-and-routing.md)). Cards show due/cards/chapters, and each
+  chapter chip starts a walker drill session scoped to that chapter's tag.
+- **Upload / Update**: `ImportStudyModal`
+  ([components](../05-web/components-and-hooks.md)) parses the PGN client-side for a
+  preview, then calls the store's `importStudy` / `updateStudy`
+  ([state-store](../05-web/state-store.md)). The sync summary is shown after submit —
+  it is the one place the user learns which alternates were demoted and why.
+- **Note on a miss**: a `note` stage in the wrong-answer flow of all three drill
+  implementations ([srs-drilling](srs-drilling.md#flow-mode)).
+- "Browse" on a study card opens the repertoire editor until S4 ships the dedicated
+  study browser.
+
 ## Not built yet
 
-S3 and S4: no Studies home, no upload modal, no note-on-miss pause, no study browser,
-no Rashid scan. The web client does not call the study endpoints yet.
+S4: no study browser view, no background Rashid scan with findings. Export of a whole
+study is still a single game.

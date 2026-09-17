@@ -1,4 +1,11 @@
-import type { Color, DrillRules, ExplorerEntry, OpeningId } from '@chess-prep/shared';
+import type {
+  Color,
+  DrillRules,
+  ExplorerEntry,
+  OpeningId,
+  RepertoireSource,
+  StudySyncSummary,
+} from '@chess-prep/shared';
 
 export interface BookContinuation {
   san: string;
@@ -16,10 +23,17 @@ export interface RepertoireSummary {
   drillRules: DrillRules;
   /** Phase 9c: silently auto-expand opponent replies while building. Off by default. */
   autoExpand: boolean;
+  /** Study S3: provenance when the tree came from a lichess study; null if hand-built. */
+  source: RepertoireSource | null;
   rootFenKey: string;
   rootFullFen: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StudyImportResult {
+  repertoire: RepertoireFull;
+  summary: StudySyncSummary;
 }
 
 export interface RepertoirePosition {
@@ -255,6 +269,27 @@ export const api = {
     return request('/repertoires/import', {
       method: 'POST',
       body: JSON.stringify(input),
+    });
+  },
+
+  /** Study S3: a lichess study export (one chapter or all) → one repertoire. */
+  importStudy(input: {
+    pgn: string;
+    color: Color;
+    name?: string;
+    tags?: string[];
+  }): Promise<StudyImportResult> {
+    return request('/repertoires/import-study', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Study S3: re-sync a study repertoire from a newer export. Diff, not reload. */
+  updateStudy(repertoireId: string, pgn: string): Promise<StudyImportResult> {
+    return request(`/repertoires/${repertoireId}/import-study`, {
+      method: 'POST',
+      body: JSON.stringify({ pgn }),
     });
   },
 

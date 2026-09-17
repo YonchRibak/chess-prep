@@ -5,7 +5,13 @@ import {
   type RepertoireFull,
   type RepertoireSummary,
 } from '../api/client.ts';
-import type { Color, DrillMode, DrillRules, LineScope } from '@chess-prep/shared';
+import type {
+  Color,
+  DrillMode,
+  DrillRules,
+  LineScope,
+  StudySyncSummary,
+} from '@chess-prep/shared';
 import {
   clearAllRepertoireDataLocal,
   deleteRepertoireLocal,
@@ -13,6 +19,9 @@ import {
 } from '../lib/idb/schema.ts';
 
 export type View =
+  // Study S3: the default landing — study-sourced repertoires and their verbs.
+  | { kind: 'studies' }
+  // The hand-built repertoire list (was the landing before S3).
   | { kind: 'list' }
   | { kind: 'browse' }
   | { kind: 'editor'; repertoireId: string }
@@ -65,6 +74,15 @@ interface AppStore {
     pgn: string;
     tags?: string[];
   }): Promise<string>;
+  /** Study S3: upload a study export as a new repertoire. */
+  importStudy(input: {
+    pgn: string;
+    color: Color;
+    name?: string;
+    tags?: string[];
+  }): Promise<{ id: string; summary: StudySyncSummary }>;
+  /** Study S3: re-sync a study repertoire from a newer export. */
+  updateStudy(id: string, pgn: string): Promise<StudySyncSummary>;
   renameRepertoire(id: string, name: string): Promise<void>;
   /** Phase 9c: opt this repertoire in/out of silent opponent auto-expansion. */
   setAutoExpand(id: string, autoExpand: boolean): Promise<void>;
@@ -97,7 +115,7 @@ function asError(e: unknown): string {
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
-  view: { kind: 'list' },
+  view: { kind: 'studies' },
   repertoires: [],
   active: null,
   loading: false,
@@ -105,7 +123,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   go(view) {
     set({ view });
-    if (view.kind === 'list') {
+    if (view.kind === 'list' || view.kind === 'studies') {
       set({ active: null });
     }
   },
@@ -134,6 +152,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
     return created.id;
   },
 
+  async importStudy(input) {
+    const { repertoire, summary } = await api.importStudy(input);
+    void putRepertoireLocal(repertoire);
+    await get().loadList();
+    return { id: repertoire.id, summary };
+  },
+
+  async updateStudy(id, pgn) {
+    const { repertoire, summary } = await api.updateStudy(id, pgn);
+    // The response IS the fresh snapshot — cache it so an offline rehearsal
+    // right after an update drills the new tree, not the old one.
+    void putRepertoireLocal(repertoire);
+    if (get().active?.id === id) set({ active: repertoire });
+    await get().loadList();
+    return summary;
+  },
+
   async setAutoExpand(id, autoExpand) {
     await api.patchRepertoire(id, { autoExpand });
     await get().loadList();
@@ -152,7 +187,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     // IndexedDB on the next cold load and looks resurrected.
     await deleteRepertoireLocal(id);
     if (get().active?.id === id) {
-      set({ active: null, view: { kind: 'list' } });
+      // Only leave the current view if it was showing the deleted repertoire.
+      const v = get().view;
+      set({ active: null, ...('repertoireId' in v ? { view: { kind: 'studies' } } : {}) });
     }
     await get().loadList();
   },
@@ -162,7 +199,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     // Server first, local second: if the request fails we have thrown before
     // touching IndexedDB, so the offline copy still matches the server.
     await clearAllRepertoireDataLocal();
-    set({ active: null, view: { kind: 'list' } });
+    set({ active: null, view: { kind: 'studies' } });
     await get().loadList();
     return deleted;
   },

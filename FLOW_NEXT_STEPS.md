@@ -175,10 +175,6 @@ workspace), but the session UIs need eyes. `pnpm dev`, then:
 
 ## 4. Merging
 
-The branches are stacked, so merging **`feat/flow-f4-smart-train`** into
-`main` brings all four commits at once. Merging one branch at a time in order
-(F1 → F2 → F3 → F4) also works if you'd rather live with each phase for a
-while first — the implementation plan suggested using F1 alone for a week.
-
-Per the repo rules, nothing gets merged or pushed to `main` without your
-explicit go-ahead.
+**Done** — all four flow branches are merged into `main` (see
+`git branch --merged main`). This section is kept for the record; the manual
+UI pass in §3 is still the only verification the session UIs get.

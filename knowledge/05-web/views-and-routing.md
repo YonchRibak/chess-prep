@@ -9,6 +9,7 @@ kept in sync with `location.hash` by a small custom hook.
 
 ```ts
 type View =
+  | { kind: 'studies' }   // Study S3: the landing
   | { kind: 'list' }
   | { kind: 'browse' }
   | { kind: 'editor';        repertoireId: string }
@@ -31,15 +32,16 @@ Navigate with `useAppStore.getState().go(view)` — never by setting the hash di
 
 ## Shell
 
-[App.tsx](../../apps/web/src/App.tsx) renders a top nav (Flow F4: *Repertoires ·
-Today · Prepare* — "Browse openings" is no longer a nav destination, though `#/browse`
-stays routable via the Prepare wizard and "New repertoire"), an `ErrorBanner` bound to
-`store.error`, and one page per `view.kind`. Adding a view means touching four places:
+[App.tsx](../../apps/web/src/App.tsx) renders a top nav (Study S3: *Studies ·
+Repertoires · Today · Prepare* — "Browse openings" is no longer a nav destination, though
+`#/browse` stays routable via the Prepare wizard and "New repertoire"), an `ErrorBanner`
+bound to `store.error`, and one page per `view.kind`. Adding a view means touching four places:
 the union, `viewToHash`, `hashToView`, and the `App` switch.
 
 | `kind` | Page |
 |---|---|
-| `list` | [RepertoireList.tsx](../../apps/web/src/pages/RepertoireList.tsx) |
+| `studies` | [StudiesHome.tsx](../../apps/web/src/pages/StudiesHome.tsx) — Study S3, **the default landing**: study-sourced repertoires (`source.kind === 'lichess-study'`) with Rehearse / Browse / Update, chapter chips that start a tag-scoped rehearsal, and the upload modal. See [study](../03-domain/study.md) |
+| `list` | [RepertoireList.tsx](../../apps/web/src/pages/RepertoireList.tsx) — hand-built repertoires; was the landing before S3 |
 | `browse` | [BrowseOpenings.tsx](../../apps/web/src/pages/BrowseOpenings.tsx) |
 | `editor` | [RepertoireEditor.tsx](../../apps/web/src/pages/RepertoireEditor.tsx) |
 | `drill-setup` | [DrillSetup.tsx](../../apps/web/src/pages/DrillSetup.tsx) — mode, rules, and the Phase 9a **Line** picker; the live queue-length preview builds the real queue, so a scope that matches nothing shows `0` before the user starts |
@@ -57,7 +59,8 @@ the union, `viewToHash`, `hashToView`, and the `App` switch.
 and syncs both directions.
 
 ```
-#/                     list (home)
+#/                     studies (home; #/studies is an alias)
+#/repertoires          list
 #/browse               opening browser
 #/daily                daily diet
 #/editor/:id           repertoire editor

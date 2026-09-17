@@ -35,6 +35,7 @@ import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache
 import { gradeAndQueue, logAttempt } from '../lib/srs/sync.ts';
 import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
 import { RefutationPrompt } from '../components/RefutationPrompt.tsx';
+import { StudyNote } from '../components/StudyNote.tsx';
 import { buildDailyDietQueue, type DailyDietItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import {
@@ -55,7 +56,9 @@ type Phase =
       kind: 'wrong';
       index: number;
       userSan: string;
-      stage: 'reveal' | 'retry';
+      /** Study S3: `note` pauses on the correct move's comment until dismissed. */
+      stage: 'reveal' | 'note' | 'retry';
+      note?: string;
       interference?: string;
     }
   | { kind: 'complete' };
@@ -186,6 +189,23 @@ export function DailyDiet() {
     return idx >= 0 ? queue[idx] ?? null : null;
   }, [queue, phase]);
 
+  /** Study S3: the note has been read — on to the retry. */
+  function dismissNote() {
+    if (phase.kind === 'wrong' && phase.stage === 'note') setPhase({ ...phase, stage: 'retry' });
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (phase.kind !== 'wrong' || phase.stage !== 'note') return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        dismissNote();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   function startTransition(): AbortController {
     transitionAbortRef.current?.abort();
     const ctl = new AbortController();
@@ -288,7 +308,15 @@ export function DailyDiet() {
         rules.playSan(it.move.san);
         await sleep(WRONG_REVEAL_MS, ctl.signal);
         rules.undo();
-        setPhase({ kind: 'wrong', index: idx, userSan: san, stage: 'retry', interference });
+        const note = it.move.comment?.trim();
+        setPhase({
+          kind: 'wrong',
+          index: idx,
+          userSan: san,
+          stage: note ? 'note' : 'retry',
+          ...(note ? { note } : {}),
+          interference,
+        });
       }
     } catch {
       /* aborted */
@@ -432,7 +460,15 @@ export function DailyDiet() {
               </Card>
             )}
 
-            {phase.kind === 'wrong' && (
+            {phase.kind === 'wrong' && phase.stage === 'note' && (
+              <StudyNote
+                san={currentItem.move.san}
+                note={phase.note ?? ''}
+                onContinue={dismissNote}
+              />
+            )}
+
+            {phase.kind === 'wrong' && phase.stage !== 'note' && (
               <Card title={phase.stage === 'reveal' ? '✗ Wrong' : 'Play the correct move'}>
                 <p className="text-sm">
                   Correct: <span className="font-mono font-medium">{currentItem.move.san}</span>

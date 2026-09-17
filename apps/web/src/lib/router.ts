@@ -4,7 +4,8 @@
  * and views are bookmarkable — without pulling in a router library.
  *
  * Mapping:
- *   #/                      → repertoire list (home)
+ *   #/                      → studies home (Study S3; also #/studies)
+ *   #/repertoires           → hand-built repertoire list
  *   #/browse                → opening browser
  *   #/daily                 → daily diet
  *   #/editor/:id            → repertoire editor
@@ -70,8 +71,10 @@ function scopeProp(query: string): { scope?: LineScope } {
 
 export function viewToHash(v: View): string {
   switch (v.kind) {
-    case 'list':
+    case 'studies':
       return '#/';
+    case 'list':
+      return '#/repertoires';
     case 'browse':
       return '#/browse';
     case 'daily':
@@ -100,9 +103,13 @@ export function hashToView(hash: string): View | null {
   const path = qIdx >= 0 ? hash.slice(0, qIdx) : hash;
   const query = qIdx >= 0 ? hash.slice(qIdx + 1) : '';
   const parts = path.replace(/^#\/?/, '').split('/').filter(Boolean);
-  if (parts.length === 0) return { kind: 'list' };
+  if (parts.length === 0) return { kind: 'studies' };
   const [head, id, arg] = parts;
   switch (head) {
+    case 'studies':
+      return { kind: 'studies' };
+    case 'repertoires':
+      return { kind: 'list' };
     case 'browse':
       return { kind: 'browse' };
     case 'daily':
@@ -164,8 +171,8 @@ async function applyView(v: View): Promise<void> {
       try {
         await store.loadRepertoire(repId);
       } catch {
-        // Repertoire gone (deleted / wrong link) — land on the list instead.
-        useAppStore.getState().go({ kind: 'list' });
+        // Repertoire gone (deleted / wrong link) — land on home instead.
+        useAppStore.getState().go({ kind: 'studies' });
         location.hash = '#/';
         return;
       }

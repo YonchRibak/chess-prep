@@ -62,6 +62,7 @@ import { gradeAndQueue, logAttempt, pullSince } from '../lib/srs/sync.ts';
 import { emptyCardFor } from '../lib/srs/scheduler.ts';
 import { describeInterference, detectInterference } from '../lib/drill/interference.ts';
 import { RefutationPrompt } from '../components/RefutationPrompt.tsx';
+import { StudyNote } from '../components/StudyNote.tsx';
 import { buildDrillQueue, buildSmartQueue, type DrillItem } from '../lib/drill/queue.ts';
 import { getEngine } from '../lib/engine/engine.ts';
 import { useEngine } from '../lib/engine/useEngine.ts';
@@ -113,10 +114,13 @@ type Phase =
       parentFullFen: string;
       /**
        * reveal: the correct move is briefly shown on the board (not movable).
+       * note: Study S3 — the correct move carries the user's own comment;
+       *   the session waits here until it is dismissed (not movable).
        * retry: the user must physically play the correct move to continue —
-       * that's where the motor memory comes from.
+       *   that's where the motor memory comes from.
        */
-      stage: 'reveal' | 'retry';
+      stage: 'reveal' | 'note' | 'retry';
+      note?: string;
       /** Phase 9d: "that SAN is your prep elsewhere in this tree", when it is. */
       interference?: string;
     }
@@ -133,7 +137,13 @@ type Phase =
    * feature is wrong.
    */
   | { kind: 'lockin-prompt'; index: number }
-  | { kind: 'lockin-wrong'; index: number; userSan: string; stage: 'reveal' | 'retry' }
+  | {
+      kind: 'lockin-wrong';
+      index: number;
+      userSan: string;
+      stage: 'reveal' | 'note' | 'retry';
+      note?: string;
+    }
   | { kind: 'complete'; reason: 'no-more-attention' | 'no-more-due' };
 
 /** One completed lock-in pass, for the guided session summary. */
@@ -545,6 +555,14 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
       if (phase.kind === 'attention' && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void skipCurrentNode();
+      } else if (
+        (phase.kind === 'drill-wrong' || phase.kind === 'lockin-wrong') &&
+        phase.stage === 'note'
+      ) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          dismissNote();
+        }
       } else if (phase.kind === 'keep-building-prompt') {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -959,15 +977,29 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
     rules.playSan(it.move.san);
     await sleep(WRONG_REVEAL_MS, signal);
     rules.undo();
+    // Study S3: a note on the correct move pauses the session here; the
+    // retry stage is reached through dismissNote().
+    const note = it.move.comment?.trim();
     setPhase({
       kind: 'drill-wrong',
       card: it.card,
       move: it.move,
       userSan,
       parentFullFen: it.parentPosition.fullFen,
-      stage: 'retry',
+      stage: note ? 'note' : 'retry',
+      ...(note ? { note } : {}),
       interference,
     });
+  }
+
+  /** Study S3: the note has been read — on to the retry. */
+  function dismissNote() {
+    if (
+      (phase.kind === 'drill-wrong' || phase.kind === 'lockin-wrong') &&
+      phase.stage === 'note'
+    ) {
+      setPhase({ ...phase, stage: 'retry' });
+    }
   }
 
   async function handleDrillMovePlayed(san: string) {
@@ -1147,7 +1179,14 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
         rules.playSan(it.move.san);
         await sleep(WRONG_REVEAL_MS, ctl.signal);
         rules.undo();
-        setPhase({ kind: 'lockin-wrong', index, userSan: san, stage: 'retry' });
+        const note = it.move.comment?.trim();
+        setPhase({
+          kind: 'lockin-wrong',
+          index,
+          userSan: san,
+          stage: note ? 'note' : 'retry',
+          ...(note ? { note } : {}),
+        });
       }
     } catch {
       /* aborted */
@@ -1387,7 +1426,15 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
               </Card>
             )}
 
-            {phase.kind === 'lockin-wrong' && (
+            {phase.kind === 'lockin-wrong' && phase.stage === 'note' && (
+              <StudyNote
+                san={lockInRef.current?.items[phase.index]?.move.san ?? ''}
+                note={phase.note ?? ''}
+                onContinue={dismissNote}
+              />
+            )}
+
+            {phase.kind === 'lockin-wrong' && phase.stage !== 'note' && (
               <Card title={phase.stage === 'reveal' ? '✗ Not yet' : 'Play the correct move'}>
                 <p className="text-sm">
                   Correct:{' '}
@@ -1511,7 +1558,11 @@ export function WalkerSession({ seed, scope: sessionScope, guided = false }: Wal
               </Card>
             )}
 
-            {phase.kind === 'drill-wrong' && (
+            {phase.kind === 'drill-wrong' && phase.stage === 'note' && (
+              <StudyNote san={phase.move.san} note={phase.note ?? ''} onContinue={dismissNote} />
+            )}
+
+            {phase.kind === 'drill-wrong' && phase.stage !== 'note' && (
               <Card title={phase.stage === 'reveal' ? '✗ Wrong' : 'Play the correct move'}>
                 <p className="text-sm">
                   Correct: <span className="font-mono font-medium">{phase.move.san}</span>

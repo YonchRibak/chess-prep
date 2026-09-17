@@ -17,13 +17,21 @@ import { getAllCardsLocal, getAttemptsLocal } from '../lib/idb/schema.ts';
 import { ensureOpeningNames, openingNameLookup } from '../lib/openings/nameCache.ts';
 import { gradeAndQueue, logAttempt, pullAttempts } from '../lib/srs/sync.ts';
 import { getEngine } from '../lib/engine/engine.ts';
+import { StudyNote } from '../components/StudyNote.tsx';
 import type { BoardColor } from '../lib/chess/useBoard.ts';
 
 type Phase =
   | { kind: 'loading' }
   | { kind: 'prompt'; index: number }
   | { kind: 'correct'; index: number }
-  | { kind: 'wrong'; index: number; userSan: string; interference?: string }
+  | {
+      kind: 'wrong';
+      index: number;
+      userSan: string;
+      interference?: string;
+      /** Study S3: the correct move's comment; the card waits until it is dismissed. */
+      note?: string;
+    }
   | { kind: 'complete' };
 
 // Flow timings — tuned so the user sees their move land and the opponent
@@ -135,6 +143,20 @@ export function DrillSession() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
+  // Study S3: dismiss the note with the keyboard. Above the early return so
+  // the hook order is stable; dismissNote is a hoisted declaration below.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (phase.kind !== 'wrong' || !phase.note) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        dismissNote();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   if (!active) {
     return (
       <p className="text-slate-400 text-sm">
@@ -199,7 +221,14 @@ export function DrillSession() {
     const interference = describeInterference(
       detectInterference(active!, it.parentPosition.id, userSan, openingLookupRef.current),
     );
-    setPhase({ kind: 'wrong', index: idx, userSan, interference: interference ?? undefined });
+    const note = it.move.comment?.trim();
+    setPhase({
+      kind: 'wrong',
+      index: idx,
+      userSan,
+      interference: interference ?? undefined,
+      ...(note ? { note } : {}),
+    });
     setStats((s) => ({ ...s, wrong: s.wrong + 1 }));
     void gradeAndQueue(it.card, Grade.Again);
     void logAttempt({
@@ -208,6 +237,13 @@ export function DrillSession() {
       playedSan: userSan,
       wasCorrect: false,
     });
+    // Study S3: with a note, stop here — dismissNote() runs the remainder.
+    if (note) return;
+    await finishWrong(it, idx, signal);
+  }
+
+  /** The tail of a miss: hold the reveal, demo the line in walkthrough, advance. */
+  async function finishWrong(it: DrillItem, idx: number, signal: AbortSignal) {
     await sleep(WRONG_REVEAL_MS, signal);
     if (mode === 'walkthrough') {
       // Demonstrate the correct line so the visual flow stays coherent.
@@ -245,6 +281,17 @@ export function DrillSession() {
     } catch {
       /* aborted */
     }
+  }
+
+  /** Study S3: the note has been read — resume the miss flow. */
+  function dismissNote() {
+    if (phase.kind !== 'wrong' || !phase.note || !item) return;
+    const idx = currentIndex;
+    setPhase({ kind: 'wrong', index: idx, userSan: phase.userSan, interference: phase.interference });
+    const ctl = startTransition();
+    finishWrong(item, idx, ctl.signal).catch(() => {
+      /* aborted */
+    });
   }
 
   async function handleShowAnswer() {
@@ -326,9 +373,11 @@ export function DrillSession() {
               </p>
             </Card>
 
-            {item.move.comment && (
-              <Card title="Comment">
-                <p className="text-xs">{item.move.comment}</p>
+            {/* Study S3: the comment is the answer's note — never shown while
+                the card is still unanswered (it used to be, which spoiled it). */}
+            {item.move.comment && phase.kind === 'correct' && (
+              <Card title="Your note">
+                <p className="text-xs whitespace-pre-wrap">{item.move.comment}</p>
               </Card>
             )}
 
@@ -359,7 +408,11 @@ export function DrillSession() {
               </Card>
             )}
 
-            {phase.kind === 'wrong' && (
+            {phase.kind === 'wrong' && phase.note && (
+              <StudyNote san={item.move.san} note={phase.note} onContinue={dismissNote} />
+            )}
+
+            {phase.kind === 'wrong' && !phase.note && (
               <Card title="✗ Expected">
                 <p className="text-sm">
                   <span className="font-mono font-medium">{item.move.san}</span>

@@ -17,13 +17,8 @@ import {
   DeleteAllRepertoiresModal,
   ImportPgnModal,
 } from '../components/RepertoireModals.tsx';
-import { api, type RepertoireSummary } from '../api/client.ts';
-import {
-  getAllCardsLocal,
-  getAllRepertoiresLocal,
-  putRepertoireLocal,
-} from '../lib/idb/schema.ts';
-import { computeRepStats, type RepStats } from '../lib/repStats.ts';
+import type { RepertoireSummary } from '../api/client.ts';
+import { useRepStats } from '../lib/useRepStats.ts';
 
 export function RepertoireList() {
   const repertoires = useAppStore((s) => s.repertoires);
@@ -41,42 +36,12 @@ export function RepertoireList() {
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [stats, setStats] = useState<Map<string, RepStats>>(new Map());
 
   useEffect(() => {
     void loadList();
   }, [loadList]);
 
-  // Per-repertoire stats from the local card store + cached full snapshots.
-  // Progressive: badges fill in as each repertoire's snapshot is available.
-  useEffect(() => {
-    if (repertoires.length === 0) return;
-    let cancelled = false;
-    (async () => {
-      const cards = await getAllCardsLocal();
-      const local = await getAllRepertoiresLocal();
-      const localById = new Map(local.map((r) => [r.id, r]));
-      const next = new Map<string, RepStats>();
-      for (const sum of repertoires) {
-        let full = localById.get(sum.id);
-        if (!full || full.updatedAt !== sum.updatedAt) {
-          try {
-            full = await api.getRepertoire(sum.id);
-            void putRepertoireLocal(full);
-          } catch {
-            /* offline — fall back to the (possibly stale) local snapshot */
-          }
-        }
-        if (!full) continue;
-        next.set(sum.id, computeRepStats(full, cards));
-        if (cancelled) return;
-        setStats(new Map(next));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [repertoires]);
+  const { stats, reset: resetStats } = useRepStats(repertoires);
 
   const totalDue = [...stats.values()].reduce((n, s) => n + s.dueCards, 0);
   const dueBySide = { white: 0, black: 0 };
@@ -338,7 +303,7 @@ export function RepertoireList() {
           onConfirm={async () => {
             const deleted = await deleteAllRepertoires();
             setShowDeleteAll(false);
-            setStats(new Map());
+            resetStats();
             setNotice(
               `Deleted ${deleted} repertoire${deleted === 1 ? '' : 's'} and their cards.`,
             );

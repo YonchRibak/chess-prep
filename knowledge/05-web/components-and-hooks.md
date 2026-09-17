@@ -55,11 +55,16 @@ i.e. [line scopes](../03-domain/opening-database.md#client-hooks) — uses `name
 | [EnginePanel.tsx](../../apps/web/src/components/EnginePanel.tsx) | Eval bar + MultiPV lines |
 | [RashidPanel.tsx](../../apps/web/src/components/RashidPanel.tsx) | [Rashid](../03-domain/rashid.md) probe panel in the editor — presentational; the *editor* owns `useRashid` ([lib/engine/useRashid.ts](../../apps/web/src/lib/engine/useRashid.ts)) so the panel and the R4 board arrows read one result. Off by default (a probe costs seconds until R5 precompute); the probe runs on Rashid's dedicated engine, never the eval panel's singleton. While on, board arrows switch to Rashid mode (`rashidShapes`, custom brushes via `Board`'s `extraBrushes`). Also hosts the R5 precompute controls (run/resume/stop, progress, drill-pause indicator) |
 | [RefutationPrompt.tsx](../../apps/web/src/components/RefutationPrompt.tsx) | Phase 9d "Why is *X* bad?" in the wrong-answer card of all three drill surfaces. Analyzes the position the **wrong move** reached — never the card's own — via the engine's one named gate exemption ([engine](../03-domain/engine.md#engine-gating)), and on confirmation stores the PV as a shadow line. Writes nothing until the user clicks save |
-| [RepertoireModals.tsx](../../apps/web/src/components/RepertoireModals.tsx) | `Modal`, `BlankRepertoireModal`, `ImportPgnModal`, `DeleteAllRepertoiresModal` — the last requires typing `DELETE`, because it is the only action that destroys **SRS history**, which no PGN re-import restores (a re-imported move returns as a new card) |
+| [StudyNote.tsx](../../apps/web/src/components/StudyNote.tsx) | Study S3: the note-on-miss pause. Rendered *instead of* the retry prompt in all three drill surfaces when the missed card's correct move carries a comment; the board is not movable until Continue (or ↵ / Space). The user's own text, so it never touches the engine gate |
+| [RepertoireModals.tsx](../../apps/web/src/components/RepertoireModals.tsx) | `Modal`, `BlankRepertoireModal`, `ImportPgnModal`, `ImportStudyModal` (Study S3: create or update mode; parses the PGN client-side for a chapter-count preview and name prefill, shows the sync summary — including which alternates the prep policy demoted and why — after submit), `DeleteAllRepertoiresModal` — the last requires typing `DELETE`, because it is the only action that destroys **SRS history**, which no PGN re-import restores (a re-imported move returns as a new card) |
 | [ui.tsx](../../apps/web/src/components/ui.tsx) | Primitives: `Btn` (variants `default`/`primary`/`ghost`), `Card`, `OverflowMenu`, `ErrorBanner` |
 
 There is no component library — `ui.tsx` is the whole design system. Add primitives there
 rather than one-off Tailwind blobs in pages.
+
+### `useRepStats(repertoires)`
+
+[lib/useRepStats.ts](../../apps/web/src/lib/useRepStats.ts) — the due / cards / to-build badge stats for a list of summaries, from the local card store plus cached snapshots, filling in progressively and falling back to a stale local snapshot offline. Shared by the repertoire list and the Studies home so the two cannot disagree about what "due" means.
 
 ## Line navigator (Flow F1)
 
