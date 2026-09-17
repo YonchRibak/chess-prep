@@ -12,11 +12,18 @@ export function TreeView({
   indices,
   currentMoveId,
   onNavigate,
+  markOrigin = false,
 }: {
   active: RepertoireFull;
   indices: TreeIndices;
   currentMoveId: string | null;
   onNavigate: (fenKey: string, moveId: string) => void;
+  /**
+   * S5: colour app-recorded extensions (`origin: 'user'`) apart from study
+   * moves. Only the study browser sets this — on a hand-built repertoire every
+   * edge is `'user'` and the whole tree would light up.
+   */
+  markOrigin?: boolean;
 }) {
   const tokens = useMemo(() => flattenTree(active, indices), [active, indices]);
   if (tokens.length === 0) {
@@ -50,6 +57,7 @@ export function TreeView({
         // Dropped edges (user "won't cover", or a study's demoted alternate)
         // and shadow lines stay visible but visibly not-prep.
         const muted = m.isDropped || m.isRefutation;
+        const extension = markOrigin && m.origin === 'user' && !m.isRefutation;
         return (
           <button
             key={i}
@@ -59,16 +67,21 @@ export function TreeView({
                 ? 'Refutation shadow line'
                 : m.isDropped
                   ? 'Not rehearsed (dropped / alternate)'
-                  : m.comment ?? undefined
+                  : extension
+                    ? `Yours — recorded in the app; survives re-import${m.comment ? `
+${m.comment}` : ''}`
+                    : m.comment ?? undefined
             }
             className={`px-1 rounded ${
               isCurrent
                 ? 'bg-emerald-700 text-white'
                 : muted
                   ? 'text-slate-600 line-through decoration-slate-700 hover:bg-slate-800'
-                  : m.isMainLine
-                    ? 'hover:bg-slate-800'
-                    : 'text-slate-400 hover:bg-slate-800'
+                  : extension
+                    ? 'text-sky-300 hover:bg-slate-800'
+                    : m.isMainLine
+                      ? 'hover:bg-slate-800'
+                      : 'text-slate-400 hover:bg-slate-800'
             }`}
           >
             {label}

@@ -14,6 +14,8 @@ import { ImportStudyModal } from '../components/RepertoireModals.tsx';
 import type { RepertoireSummary } from '../api/client.ts';
 import { useRepStats } from '../lib/useRepStats.ts';
 import { useRashidScan } from '../store/rashidScan.ts';
+import { readLastChapter } from '../lib/rehearse/useRehearseSession.ts';
+import type { ChapterStats } from '../lib/rehearse/chapterStats.ts';
 
 export function StudiesHome() {
   const repertoires = useAppStore((s) => s.repertoires);
@@ -29,6 +31,8 @@ export function StudiesHome() {
   const [showUpload, setShowUpload] = useState(false);
   const [updating, setUpdating] = useState<RepertoireSummary | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  // S5: the chapter last rehearsed per study, so its row reads "Resume".
+  const [lastChapter, setLastChapter] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     void loadList();
@@ -36,6 +40,22 @@ export function StudiesHome() {
 
   const studies = repertoires.filter((r) => r.source?.kind === 'lichess-study');
   const { stats } = useRepStats(studies);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const next = new Map<string, string>();
+      for (const r of studies) {
+        const tag = await readLastChapter(r.id);
+        if (tag) next.set(r.id, tag);
+      }
+      if (!cancelled) setLastChapter(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repertoires]);
   const totalDue = [...stats.values()].reduce((n, s) => n + s.dueCards, 0);
 
   /** Load into `active` first so the session component has its tree. */
@@ -163,28 +183,26 @@ export function StudiesHome() {
                   </span>
                 </div>
 
-                {/* Chapter chips: one tap starts a rehearsal scoped to that chapter. */}
-                <div className="flex flex-wrap gap-1">
-                  {src.chapters.map((ch) => (
-                    <button
-                      key={ch.tag}
-                      title={`Rehearse only "${ch.name}"`}
-                      onClick={() =>
-                        void withLoaded(r.id, () =>
-                          go({
-                            kind: 'walker-session',
-                            repertoireId: r.id,
-                            seed: 'drill',
-                            scope: { kind: 'tag', value: ch.tag },
-                          }),
-                        )
-                      }
-                      className="text-[10px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-300 hover:border-emerald-700 hover:text-emerald-200"
-                    >
-                      {ch.name}
-                    </button>
-                  ))}
-                </div>
+                {/* S5: chapter rows — one click starts the flashcards for that chapter. */}
+                <ul className="flex flex-col gap-1">
+                  {[...src.chapters]
+                    .sort((a, b) =>
+                      a.tag === lastChapter.get(r.id) ? -1 : b.tag === lastChapter.get(r.id) ? 1 : 0,
+                    )
+                    .map((ch) => (
+                      <ChapterRow
+                        key={ch.tag}
+                        name={ch.name}
+                        stats={s?.byTag.get(ch.tag)}
+                        resume={lastChapter.get(r.id) === ch.tag}
+                        onStart={() =>
+                          void withLoaded(r.id, () =>
+                            go({ kind: 'rehearse', repertoireId: r.id, chapterTag: ch.tag }),
+                          )
+                        }
+                      />
+                    ))}
+                </ul>
 
                 <p className="text-[10px] text-slate-500">
                   Imported {new Date(src.importedAt).toLocaleString()}
@@ -207,12 +225,11 @@ export function StudiesHome() {
                   <Btn
                     variant={s && s.dueCards > 0 ? 'primary' : 'default'}
                     onClick={() =>
-                      void withLoaded(r.id, () =>
-                        go({ kind: 'walker-session', repertoireId: r.id, seed: 'drill' }),
-                      )
+                      void withLoaded(r.id, () => go({ kind: 'rehearse', repertoireId: r.id }))
                     }
+                    title="Shuffle every chapter"
                   >
-                    Rehearse{s && s.dueCards > 0 ? ` (${s.dueCards})` : ''}
+                    Rehearse all{s && s.dueCards > 0 ? ` (${s.dueCards})` : ''}
                   </Btn>
                   <Btn
                     onClick={() =>
@@ -237,7 +254,14 @@ export function StudiesHome() {
                             }),
                         },
                         {
-                          label: 'Lines',
+                          label: 'Expand variations',
+                          onClick: () =>
+                            void withLoaded(r.id, () =>
+                              go({ kind: 'rehearse', repertoireId: r.id, mode: 'expand' }),
+                            ),
+                        },
+                        {
+                          label: 'Lines (walker)',
                           onClick: () =>
                             void withLoaded(r.id, () =>
                               go({ kind: 'lines', repertoireId: r.id, intent: 'train' }),
@@ -280,6 +304,71 @@ export function StudiesHome() {
         />
       )}
     </div>
+  );
+}
+
+/** A chapter with its mastery ring and one Start button; the whole row is the target. */
+function ChapterRow({
+  name,
+  stats,
+  resume,
+  onStart,
+}: {
+  name: string;
+  stats: ChapterStats | undefined;
+  resume: boolean;
+  onStart: () => void;
+}) {
+  const total = stats?.cards ?? 0;
+  const ratio = total > 0 ? (stats!.mastered / total) : 0;
+  return (
+    <li>
+      <button
+        onClick={onStart}
+        title={resume ? `Resume "${name}"` : `Start flashcards for "${name}"`}
+        className={`w-full flex items-center gap-2 rounded border px-2 py-1 text-left text-xs hover:bg-slate-800 ${
+          resume ? 'border-emerald-800 bg-emerald-950/30' : 'border-slate-800'
+        }`}
+      >
+        <MasteryRing ratio={ratio} />
+        <span className="flex-1 truncate">{name}</span>
+        {stats ? (
+          <span className="font-mono text-[10px] text-slate-500 shrink-0">
+            {stats.mastered}/{total}
+            {stats.due > 0 && <span className="text-emerald-300"> · {stats.due} due</span>}
+          </span>
+        ) : (
+          <span className="text-[10px] text-slate-600">…</span>
+        )}
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+            resume ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-300'
+          }`}
+        >
+          {resume ? 'Resume' : 'Start'}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function MasteryRing({ ratio }: { ratio: number }) {
+  const r = 7;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden className="shrink-0 -rotate-90">
+      <circle cx="9" cy="9" r={r} fill="none" stroke="#1e293b" strokeWidth="3" />
+      <circle
+        cx="9"
+        cy="9"
+        r={r}
+        fill="none"
+        stroke="#34d399"
+        strokeWidth="3"
+        strokeDasharray={`${c * ratio} ${c}`}
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

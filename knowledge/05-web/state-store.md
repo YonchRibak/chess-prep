@@ -24,6 +24,9 @@ interface AppStore {
   `Error` → its message, anything else → `"Unknown error"`. Rendered by the shell's
   `ErrorBanner`; cleared with `clearError()`.
 - Subscribe with selectors (`useAppStore(s => s.view)`), not the whole store.
+- **Session state is not in the store.** Each drill surface keeps its phase machine in
+  local React state; S5's lives in the `useRehearseSession` hook. The store only carries
+  the `View` (`rehearse` since S5) and the `active` tree the session reads.
 
 ## Actions
 

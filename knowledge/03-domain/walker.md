@@ -160,7 +160,9 @@ and cost one click to fill:
 ## Path replay (Phase 8c)
 
 `findPathToPosition(...)` returns the move path from the root. Sessions load the board
-by **replaying that path**, not by snap-loading a FEN. Consequences worth knowing:
+by **replaying that path**, not by snap-loading a FEN. Its S5 `prefer` option orders each
+node's edges preferred-first, so a chapter-scoped rehearsal reaches a transposition
+through the chapter's own line rather than another chapter's. Consequences worth knowing:
 
 - `rules.history` is the true current line, which drives [MoveLine.tsx](../../apps/web/src/components/MoveLine.tsx).
 - Deepest-opening lookup gets the full path (previously it only saw a shallow 2-position

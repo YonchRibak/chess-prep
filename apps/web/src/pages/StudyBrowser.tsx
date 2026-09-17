@@ -211,6 +211,7 @@ function Browser({ active, initialFenKey }: { active: RepertoireFull; initialFen
               indices={indices}
               currentMoveId={lastMoveId}
               onNavigate={(fk, id) => navigate(fk, id)}
+              markOrigin
             />
           </Card>
         </div>
@@ -233,6 +234,22 @@ function Browser({ active, initialFenKey }: { active: RepertoireFull; initialFen
                 {lastMove.isDropped && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">
                     alternate — not rehearsed
+                  </span>
+                )}
+                {!lastMove.isRefutation && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      lastMove.origin === 'user'
+                        ? 'bg-sky-900/50 text-sky-200 border border-sky-800'
+                        : 'bg-slate-800 text-slate-500'
+                    }`}
+                    title={
+                      lastMove.origin === 'user'
+                        ? 'Recorded in the app (Expand variations); a re-import keeps it'
+                        : 'From the lichess study; a re-import may change or remove it'
+                    }
+                  >
+                    {lastMove.origin === 'user' ? 'yours' : 'from study'}
                   </span>
                 )}
               </div>

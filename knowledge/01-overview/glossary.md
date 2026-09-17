@@ -51,6 +51,9 @@ Terms used consistently across code, spec, and these docs.
 | **Study** | A lichess study export imported as *one* repertoire with `repertoires.source` provenance. Preparation happens in lichess; this app rehearses it. [study](../03-domain/study.md) |
 | **Chapter** | One game of the study export. Becomes a line tag on every edge it contains, so a chapter is rehearsable through the ordinary tag scope. |
 | **Demoted alternate** | A hero-side move the study offers at a position where an earlier chapter's main line already claims the prep slot. Imported with `is_dropped = true`, never carded, reported in the import summary. |
+| **Rehearsal session** | S5's one-click flashcard flow for a chapter (`#/rehearse`): every live hero move in scope, shuffled, animated line transitions, silent FSRS grading. [study](../03-domain/study.md#rehearsal-session-s5--the-main-loops-front-door) |
+| **Expand variations** | S5 mode that walks a chapter's opponent-turn positions and offers replies the study doesn't cover; the move you play against one is recorded as an *extension*. |
+| **Stub card** | A local `emptyCardFor` card the rehearsal queue synthesizes for a hero move the card store hasn't pulled yet, so every move is playable; grading it lands on the real card by `moveId`. |
 
 ## Flow (F-phase) terms
 

@@ -53,7 +53,10 @@ export type View =
   // Rashid dev harness — R0 throughput measurement + live calibration runs.
   | { kind: 'rashid-lab' }
   // Study S4: browse an imported study; `fenKey` deep-links a position.
-  | { kind: 'study-browser'; repertoireId: string; fenKey?: string };
+  | { kind: 'study-browser'; repertoireId: string; fenKey?: string }
+  // Study S5: one-click chapter rehearsal. `chapterTag` scopes to one chapter
+  // (absent = whole study); `mode: 'expand'` opens Expand variations directly.
+  | { kind: 'rehearse'; repertoireId: string; chapterTag?: string; mode?: 'cards' | 'expand' };
 
 interface AppStore {
   view: View;

@@ -16,6 +16,8 @@ interface BoardProps {
   extraBrushes?: Record<string, DrawBrush>;
   /** Notified after a legal move is accepted by the rules engine. */
   onMovePlayed?: (san: string) => void;
+  /** Piece-glide duration for the next position change; see `useBoard`. */
+  animationMs?: number;
 }
 
 const COLOR_LONG: Record<'w' | 'b', BoardColor> = { w: 'white', b: 'black' };
@@ -27,6 +29,7 @@ export function Board({
   shapes,
   extraBrushes,
   onMovePlayed,
+  animationMs,
 }: BoardProps) {
   const turnColor = COLOR_LONG[rules.turn];
   const effectiveMovable = movableColor === undefined ? turnColor : movableColor;
@@ -55,6 +58,7 @@ export function Board({
     check,
     shapes,
     extraBrushes,
+    animationMs,
     onMove: (from, to) => {
       const san = rules.tryMove(from as Square, to as Square);
       if (san) onMovePlayed?.(san);

@@ -28,7 +28,15 @@ export interface UseBoardOptions {
   extraBrushes?: Record<string, DrawBrush>;
   /** Fired when the user completes a drag/click move. */
   onMove?: (from: Key, to: Key) => void;
+  /**
+   * Piece-glide duration for the next position change (default 150). `0`
+   * disables animation, so a caller can snap-load a line and then animate
+   * only its final ply — see `useLineTransition`.
+   */
+  animationMs?: number;
 }
+
+const DEFAULT_ANIMATION_MS = 150;
 
 export interface BoardHandle {
   ref: React.RefObject<HTMLDivElement>;
@@ -65,12 +73,16 @@ export function useBoard(opts: UseBoardOptions): BoardHandle {
   useEffect(() => {
     const api = apiRef.current;
     if (!api) return;
+    const animationMs = opts.animationMs ?? DEFAULT_ANIMATION_MS;
     api.set({
       fen: opts.fen,
       orientation: opts.orientation,
       turnColor: opts.turnColor,
       lastMove: opts.lastMove ?? undefined,
       check: opts.check ?? undefined,
+      // chessground reads `animation` per `set`, so this steers the glide of
+      // THIS update; it must travel in the same call as the new fen.
+      animation: { enabled: animationMs > 0, duration: animationMs },
       movable: {
         color: opts.movableColor ?? undefined,
         dests: opts.movableDests,
@@ -86,6 +98,7 @@ export function useBoard(opts: UseBoardOptions): BoardHandle {
     opts.movableDests,
     opts.lastMove,
     opts.check,
+    opts.animationMs,
   ]);
 
   // Shape annotations (heatmap arrows, etc.) — push separately because the
@@ -111,7 +124,10 @@ function buildConfig(
     lastMove: opts.lastMove ?? undefined,
     check: opts.check ?? undefined,
     coordinates: true,
-    animation: { enabled: true, duration: 150 },
+    animation: {
+      enabled: (opts.animationMs ?? DEFAULT_ANIMATION_MS) > 0,
+      duration: opts.animationMs ?? DEFAULT_ANIMATION_MS,
+    },
     movable: {
       color: opts.movableColor ?? undefined,
       dests: opts.movableDests,

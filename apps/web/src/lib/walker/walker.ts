@@ -362,14 +362,21 @@ export function findNextBuildNodeFrom(
  *
  * Returns `[]` for the root itself AND for unreachable positions — callers
  * that need to distinguish should check `targetPositionId` against the root.
+ *
+ * `prefer` (Study S5) orders each node's edges preferred-first so that, among
+ * equally short paths, the one through preferred edges wins — a chapter-scoped
+ * rehearsal replays the chapter's own line into a transposition rather than
+ * another chapter's.
  */
 export function findPathToPosition(
   rep: RepertoireFull,
   indices: WalkerIndices,
   targetPositionId: string,
+  opts: { prefer?: (m: RepertoireMove) => boolean } = {},
 ): RepertoireMove[] {
   const root = indices.positionByKey.get(rep.rootFenKey);
   if (!root || root.id === targetPositionId) return [];
+  const prefer = opts.prefer;
 
   // BFS over live moves, remembering the edge used to first reach each node.
   const cameBy = new Map<string, RepertoireMove>();
@@ -377,7 +384,11 @@ export function findPathToPosition(
   const visited = new Set<string>([root.id]);
   while (queue.length > 0) {
     const id = queue.shift()!;
-    const liveOut = (indices.movesByParent.get(id) ?? []).filter((m) => !m.isDropped);
+    let liveOut = (indices.movesByParent.get(id) ?? []).filter((m) => !m.isDropped);
+    if (prefer) {
+      // Stable partition: preferred edges keep their relative order, then the rest.
+      liveOut = [...liveOut.filter(prefer), ...liveOut.filter((m) => !prefer(m))];
+    }
     for (const m of liveOut) {
       if (visited.has(m.childPositionId)) continue;
       visited.add(m.childPositionId);

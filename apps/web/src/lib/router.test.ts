@@ -62,6 +62,10 @@ describe('viewToHash / hashToView round-trip', () => {
       scope: { kind: 'openingName', value: 'Caro-Kann Defense' },
       guided: true,
     },
+    // Study S5: chapter tags are free text (spaces, colons, slashes).
+    { kind: 'rehearse', repertoireId: 'abc' },
+    { kind: 'rehearse', repertoireId: 'abc', chapterTag: 'Chapter 2: Najdorf / 6.Bg5' },
+    { kind: 'rehearse', repertoireId: 'abc', chapterTag: 'Open', mode: 'expand' },
   ];
 
   for (const v of views) {
@@ -102,6 +106,21 @@ describe('hashToView — malformed scope params fall back to absent', () => {
 
   it('a malformed scope never turns a valid path into null', () => {
     expect(hashToView('#/walker/abc/drill?scope=%%%')).toEqual(base);
+  });
+});
+
+describe('hashToView — rehearse (Study S5)', () => {
+  it('treats any mode other than expand as the cards session', () => {
+    expect(hashToView('#/rehearse/abc?mode=bogus')).toEqual({ kind: 'rehearse', repertoireId: 'abc' });
+    expect(hashToView('#/rehearse/abc/Open?mode=cards')).toEqual({
+      kind: 'rehearse',
+      repertoireId: 'abc',
+      chapterTag: 'Open',
+    });
+  });
+
+  it('needs a repertoire id', () => {
+    expect(hashToView('#/rehearse')).toBeNull();
   });
 });
 

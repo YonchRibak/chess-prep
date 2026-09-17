@@ -7,6 +7,7 @@
 import type { SrsCardDto } from '@chess-prep/shared';
 import type { RepertoireFull } from '../api/client.ts';
 import { buildIndices, computeCoverage } from './walker/walker.ts';
+import { computeChapterStats, type ChapterStats } from './rehearse/chapterStats.ts';
 
 export interface RepStats {
   totalCards: number;
@@ -15,6 +16,8 @@ export interface RepStats {
   /** Positions with no live continuation — the walker's build TODO. */
   uncovered: number;
   liveMoves: number;
+  /** Study S5: per line tag (= per chapter) progress for the Studies home rows. */
+  byTag: Map<string, ChapterStats>;
 }
 
 export function computeRepStats(
@@ -43,5 +46,6 @@ export function computeRepStats(
     newCards,
     uncovered: cov.uncovered,
     liveMoves: cov.liveMoves,
+    byTag: computeChapterStats(rep, cards, now),
   };
 }

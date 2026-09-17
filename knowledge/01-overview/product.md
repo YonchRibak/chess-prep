@@ -10,8 +10,10 @@ stopped by your own note when you go wrong. So:
 
 1. **Upload a study** — one chapter or the whole export — and it becomes one
    repertoire with a chapter per scope ([study](../03-domain/study.md)).
-2. **Rehearse it** flashcard-style with FSRS, fully offline; a miss on a commented
-   move pauses to show the note.
+2. **Rehearse it** — click a chapter and the flashcards start (`#/rehearse`, Study S5):
+   shuffled, animated, graded silently with FSRS, fully offline; a miss on a commented
+   move pauses to show the note. "Expand variations" fills the gaps a study leaves —
+   opponent replies it doesn't cover — and what you record there survives re-upload.
 3. **Re-upload** whenever the study changes; the sync is a diff, so scheduling history
    on unchanged moves is kept.
 4. **Browse and analyze** it: engine eval and Rashid trap-finding on demand, per

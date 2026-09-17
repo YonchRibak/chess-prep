@@ -547,6 +547,9 @@ function StudySummaryView({ summary: s }: { summary: StudySyncSummary }) {
     ['Cards kept (history preserved)', s.cardsKept],
   ];
   if (s.refutationsKept > 0) rows.push(['Refutation lines kept', s.refutationsKept]);
+  if (s.extensionsKept > 0) rows.push(['Your extensions kept', s.extensionsKept]);
+  if (s.extensionsAdopted > 0) rows.push(['Your extensions now in the study', s.extensionsAdopted]);
+  if (s.extensionsRemoved > 0) rows.push(['Your extensions removed (line gone)', s.extensionsRemoved]);
   const cross = s.demoted.filter((d) => d.reason === 'cross-chapter');
   const vars = s.demoted.filter((d) => d.reason === 'variation');
   return (
@@ -559,6 +562,22 @@ function StudySummaryView({ summary: s }: { summary: StudySyncSummary }) {
           </div>
         ))}
       </dl>
+      {s.extensionsDemoted.length > 0 && (
+        <div className="text-xs">
+          <p className="text-slate-300 mb-1">
+            The study now plays a different move where you had recorded one — yours{' '}
+            {s.extensionsDemoted.length === 1 ? 'is' : 'are'} parked, scheduling kept:
+          </p>
+          <ul className="ml-3 list-disc text-slate-400">
+            {s.extensionsDemoted.map((d) => (
+              <li key={`${d.parentFenKey}:${d.san}`}>
+                study plays <span className="font-mono">{d.keptSan}</span>; your{' '}
+                <span className="font-mono">{d.san}</span> parked
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {s.demoted.length > 0 && (
         <div className="text-xs">
           <p className="text-slate-300 mb-1">

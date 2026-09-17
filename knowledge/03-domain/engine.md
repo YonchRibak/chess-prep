@@ -81,16 +81,17 @@ second one without the same argument.
 | [DrillSession](../../apps/web/src/pages/DrillSession.tsx) | Gated for the whole mount |
 | [DailyDiet](../../apps/web/src/pages/DailyDiet.tsx) | Gated for the whole mount |
 | [WalkerSession](../../apps/web/src/pages/WalkerSession.tsx) | Gated **per phase** — build phases (`attention`, `drill-paused-for-build`) run the engine, since there's no card answer to leak while authoring prep; every drill phase re-gates. Flow F2's **lock-in phases** (`lockin-prompt`, `lockin-wrong`) are drill phases and gate too — the user is being tested on a move they just chose *with* engine help, and seeing the eval again before grading would leak the answer they're supposed to recall |
+| [RehearseSession](../../apps/web/src/pages/RehearseSession.tsx) (Study S5) | Gated **per phase** from one boolean in `useRehearseSession`: every card phase — `loading`, `transition` (its end position *is* the next card), `prompt`, `miss`, `summary` — is gated. Ungated in the `expand` phases (no unanswered card; eval bar always, PV lines + arrows behind a toggle) and, only when the session's *eval after answer* toggle is on, for the short `correct` pause — showing the **eval bar only** (`EnginePanel showLines={false}`), because the PV's second ply is the hero's next move and may be a later card |
 | Repertoire editor, opening browser, [study browser](../../apps/web/src/pages/StudyBrowser.tsx) | Ungated — no unanswered card is ever on screen. The study browser's eval panel and Rashid probe both default to **off** (S4: "watch the engine when I want, hide it when I don't") |
 
 After a card is graded, revealing eval is allowed only if the per-repertoire
 `evalAfterAnswer` drill rule is on; if off, it stays hidden for the whole session.
 
-Both drill and daily sessions un-gate on unmount.
+Drill, daily and rehearsal sessions all un-gate on unmount.
 
 ## Analysis surfaces
 
-- [EnginePanel.tsx](../../apps/web/src/components/EnginePanel.tsx) — eval bar + MultiPV lines.
+- [EnginePanel.tsx](../../apps/web/src/components/EnginePanel.tsx) — eval bar + MultiPV lines. `showLines={false}` renders the bar and score only (S5's eval-after-answer peek); `hideToggle` when the owner controls the engine.
 - [arrows.ts](../../apps/web/src/lib/engine/arrows.ts) — top-3 moves as Chessground shapes,
   best = green then blue / yellow (`BRUSH_HEX`, `brushForRank`, `colorForRank`).
   Tested in [arrows.test.ts](../../apps/web/src/lib/engine/arrows.test.ts).

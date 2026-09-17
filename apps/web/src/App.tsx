@@ -13,6 +13,7 @@ import { LineNavigator } from './pages/LineNavigator.tsx';
 import { PrepareWizard } from './pages/PrepareWizard.tsx';
 import { RashidLab } from './pages/RashidLab.tsx';
 import { StudyBrowser } from './pages/StudyBrowser.tsx';
+import { RehearseSession } from './pages/RehearseSession.tsx';
 import { useRashidScan } from './store/rashidScan.ts';
 import { Btn, ErrorBanner } from './components/ui.tsx';
 import { attachOnlineFlush, flushQueue } from './lib/srs/sync.ts';
@@ -32,6 +33,7 @@ const VIEW_LABEL: Record<string, string> = {
   prepare: 'Prepare',
   'rashid-lab': 'Rashid lab',
   'study-browser': 'Study',
+  rehearse: 'Rehearse',
 };
 
 export function App() {
@@ -130,6 +132,13 @@ export function App() {
         {view.kind === 'prepare' && <PrepareWizard />}
         {view.kind === 'rashid-lab' && <RashidLab />}
         {view.kind === 'study-browser' && <StudyBrowser fenKey={view.fenKey} />}
+        {view.kind === 'rehearse' && (
+          <RehearseSession
+            key={`${view.repertoireId}:${view.chapterTag ?? ''}`}
+            chapterTag={view.chapterTag}
+            mode={view.mode ?? 'cards'}
+          />
+        )}
       </main>
 
       {error && <ErrorBanner message={error} onClose={clearError} />}

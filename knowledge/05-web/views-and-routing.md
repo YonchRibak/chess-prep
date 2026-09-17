@@ -11,6 +11,7 @@ kept in sync with `location.hash` by a small custom hook.
 type View =
   | { kind: 'studies' }   // Study S3: the landing
   | { kind: 'study-browser'; repertoireId: string; fenKey?: string }   // Study S4
+  | { kind: 'rehearse'; repertoireId: string; chapterTag?: string; mode?: 'cards' | 'expand' } // Study S5
   | { kind: 'list' }
   | { kind: 'browse' }
   | { kind: 'editor';        repertoireId: string }
@@ -41,7 +42,7 @@ the union, `viewToHash`, `hashToView`, and the `App` switch.
 
 | `kind` | Page |
 |---|---|
-| `studies` | [StudiesHome.tsx](../../apps/web/src/pages/StudiesHome.tsx) — Study S3, **the default landing**: study-sourced repertoires (`source.kind === 'lichess-study'`) with Rehearse / Browse / Update, chapter chips that start a tag-scoped rehearsal, and the upload modal. See [study](../03-domain/study.md) |
+| `studies` | [StudiesHome.tsx](../../apps/web/src/pages/StudiesHome.tsx) — Study S3/S5, **the default landing**: study-sourced repertoires (`source.kind === 'lichess-study'`) with chapter rows (mastery ring, due count, Start — or **Resume** on the last rehearsed chapter) that open `#/rehearse`, plus Rehearse all / Browse / Update and the upload modal. See [study](../03-domain/study.md) |
 | `list` | [RepertoireList.tsx](../../apps/web/src/pages/RepertoireList.tsx) — hand-built repertoires; was the landing before S3 |
 | `browse` | [BrowseOpenings.tsx](../../apps/web/src/pages/BrowseOpenings.tsx) |
 | `editor` | [RepertoireEditor.tsx](../../apps/web/src/pages/RepertoireEditor.tsx) |
@@ -53,6 +54,7 @@ the union, `viewToHash`, `hashToView`, and the `App` switch.
 | `lines` | [LineNavigator.tsx](../../apps/web/src/pages/LineNavigator.tsx) — Flow F1: per-line due/toBuild badges; each row starts a session-scoped walker session |
 | `prepare` | [PrepareWizard.tsx](../../apps/web/src/pages/PrepareWizard.tsx) — Flow F2: search target → infer color → extend/create (fenKey match decides) → prep target → launch a guided session. Commits the stem *before* launching, because a scoped build can't start a line that doesn't exist |
 | `study-browser` | [StudyBrowser.tsx](../../apps/web/src/pages/StudyBrowser.tsx) — Study S4: step through an imported study (tree, breadcrumb, ← → ↑ ↓ Home, board moves navigate or snap back), read the note on the current move, eval panel and Rashid probe **off by default**, and the background study scan with its findings list. Not an editor — no add-move gesture. `fenKey` deep-links a position (`?at=`) |
+| `rehearse` | [RehearseSession.tsx](../../apps/web/src/pages/RehearseSession.tsx) — Study S5, **the main loop**: one-click shuffled flashcards for a chapter (or the whole study), animated line transitions, hint/skip, note on a miss, Expand variations, end-of-session summary. `chapterTag` scopes; `mode: 'expand'` opens Expand directly. See [study](../03-domain/study.md#rehearsal-session-s5--the-main-loops-front-door) |
 | `rashid-lab` | [RashidLab.tsx](../../apps/web/src/pages/RashidLab.tsx) — [Rashid](../03-domain/rashid.md) dev harness: R0 throughput measurement + live calibration runs. No nav entry; reach it by typing the hash |
 
 ## Hash routing
@@ -64,6 +66,7 @@ and syncs both directions.
 #/                     studies (home; #/studies is an alias)
 #/repertoires          list
 #/study/:id?at=<fenKey> study browser (S4)
+#/rehearse/:id[/:chapterTag][?mode=expand]  rehearsal session (S5); tag URI-encoded, any other mode = cards
 #/browse               opening browser
 #/daily                daily diet
 #/editor/:id           repertoire editor

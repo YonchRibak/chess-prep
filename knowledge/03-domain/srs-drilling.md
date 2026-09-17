@@ -249,10 +249,25 @@ annotation, and replaying tree writes on reconnect is reserved for grades.
 **Not built:** using the attempt log to steer growth (expanding the frontier where the
 user is weak). See [repertoire-growth](repertoire-growth.md#mistake-rehearsal).
 
-## Three drill implementations (known debt)
+## Four drill implementations (known debt)
 
 Classic [DrillSession.tsx](../../apps/web/src/pages/DrillSession.tsx), the walker's drill
-seed, and [DailyDiet.tsx](../../apps/web/src/pages/DailyDiet.tsx) are separate code paths.
-Merging them into one multi-repertoire walker is deliberately deferred; classic drill
-stays reachable via the repertoire card's overflow menu until then. **Changes to drill
-behavior likely need to be made in more than one place** — check all three.
+seed, [DailyDiet.tsx](../../apps/web/src/pages/DailyDiet.tsx), and — since Study S5 —
+the rehearsal session
+([useRehearseSession.ts](../../apps/web/src/lib/rehearse/useRehearseSession.ts)) are
+separate code paths. Merging them into one multi-repertoire walker is deliberately
+deferred; classic drill stays reachable via the repertoire card's overflow menu until
+then. **Changes to drill behavior likely need to be made in more than one place** —
+check all four.
+
+S5 extracted two pieces the rehearsal session uses and the older three do **not** yet:
+[missFlow.ts](../../apps/web/src/lib/drill/missFlow.ts) (`runMissReveal`,
+`nextMissStage` — the reveal → note → retry sequence) with the presentational
+[MissPanel](../../apps/web/src/components/MissPanel.tsx), and
+[useLineTransition](../../apps/web/src/lib/chess/useLineTransition.ts) (animated line
+changes instead of a snap-load). Adopting them elsewhere is the consolidation path.
+
+The rehearsal session also differs on purpose: its queue is every live hero move in
+scope, shuffled, with **stub cards** for moves the local store has no card for yet
+([study](study.md#rehearsal-session-s5--the-main-loops-front-door)); it ignores the
+stored drill rules; a correct answer after a hint grades **Hard**.

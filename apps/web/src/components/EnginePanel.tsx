@@ -12,6 +12,15 @@ interface EnginePanelProps {
   error: string | null;
   enabled: boolean;
   onToggleEnabled: () => void;
+  /**
+   * Study S5: `false` renders the eval bar and score only — no PV lines, no
+   * arrow legend. Used where the *evaluation* may be shown but the *moves*
+   * may not (the eval-after-answer pause: the PV's next hero ply could be a
+   * later card).
+   */
+  showLines?: boolean;
+  /** Hide the pause/resume button (the owner controls the engine elsewhere). */
+  hideToggle?: boolean;
 }
 
 export function EnginePanel({
@@ -21,6 +30,8 @@ export function EnginePanel({
   error,
   enabled,
   onToggleEnabled,
+  showLines = true,
+  hideToggle = false,
 }: EnginePanelProps) {
   const turn = (fen.split(/\s+/)[1] ?? 'w') as 'w' | 'b';
   const best = progress?.lines[0];
@@ -52,16 +63,18 @@ export function EnginePanel({
             )}
           </div>
         </div>
-        <button
-          onClick={onToggleEnabled}
-          className="text-xs px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
-          title={enabled ? 'Pause engine' : 'Resume engine'}
-        >
-          {enabled ? '⏸' : '▶'}
-        </button>
+        {!hideToggle && (
+          <button
+            onClick={onToggleEnabled}
+            className="text-xs px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
+            title={enabled ? 'Pause engine' : 'Resume engine'}
+          >
+            {enabled ? '⏸' : '▶'}
+          </button>
+        )}
       </div>
 
-      {progress && progress.lines.length > 0 && (
+      {showLines && progress && progress.lines.length > 0 && (
         <>
           <ul className="mt-3 flex flex-col gap-1">
             {[...progress.lines]

@@ -14,6 +14,7 @@ Status by phase:
 | **S2** | API: `repertoires.source` provenance + upsert sync endpoints ([studies.ts](../../apps/api/src/services/studies.ts)) | ✅ built |
 | **S3** | Web: Studies home as the default landing, upload/update modal, note-on-miss pause in all three drill implementations | ✅ built |
 | **S4** | Web: study browser view (tree + toggleable engine + Rashid) and the background Rashid scan with findings | ✅ built |
+| **S5** | Web + API: one-click chapter rehearsal (`#/rehearse`), animated line transitions, Expand variations, and `moves.origin` so app-recorded extensions survive re-import | ✅ built |
 
 ## Parsing — [study.ts](../../packages/shared/src/study.ts)
 
@@ -113,8 +114,89 @@ door open.
   rebuilds the list from cache layer B after a reload. Details and rules in
   [rashid](rashid.md).
 
+## Rehearsal session (S5) — the main loop's front door
+
+[RehearseSession.tsx](../../apps/web/src/pages/RehearseSession.tsx) (layout) ·
+[useRehearseSession.ts](../../apps/web/src/lib/rehearse/useRehearseSession.ts) (state
+machine + every side effect) · view `rehearse`, hash `#/rehearse/:id[/:chapterTag]`
+([views](../05-web/views-and-routing.md)).
+
+**Why a fourth drill implementation.** The walker's drill seed carried build, guided,
+lock-in and drill-pauses-for-build concerns into a screen whose only job is "click a
+chapter, play moves". Rather than thread a simpler mode through that phase machine, S5
+is a focused page over the same tree, queue builder, FSRS and board — and the pieces
+that *are* shared with the older surfaces were extracted (`missFlow.ts`,
+`useLineTransition`) so they can adopt them later. Recorded as debt in
+[srs-drilling](srs-drilling.md#four-drill-implementations-known-debt).
+
+**One click.** A chapter row on the Studies home (mastery ring, due count, Start/Resume —
+the last rehearsed chapter per study is remembered in the IndexedDB `meta` KV) starts
+the session directly. No mode, no rules, no "cards due" gate.
+
+**Queue** — [rehearse/queue.ts](../../apps/web/src/lib/rehearse/queue.ts): *every* live
+hero move in scope, **shuffled** (the user's choice), via `buildDrillQueue({ mode:
+'random' })` under the chapter's tag scope. Stored drill rules are deliberately ignored.
+A hero move whose card the local store has not pulled yet gets a **stub card**
+(`emptyCardFor`); grading a stub pushes by `moveId` onto the real card, so nothing is
+invented server-side. Each item carries `pathSans` from `findPathToPosition` with the
+S5 `prefer` option, so a transposition is replayed through the chapter's own line.
+
+**Grading is silent**: correct = Good, wrong = Again, correct-after-hint = Hard.
+Every answer goes through `gradeAndQueue` + `logAttempt`, so the daily session and
+mistakes mode see exactly what happened here. `N` skips without grading; skipped
+cards return once at the end of the session.
+
+**Transitions** — [lineTransition.ts](../../apps/web/src/lib/chess/lineTransition.ts)
+(pure planner, tested) + [useLineTransition.ts](../../apps/web/src/lib/chess/useLineTransition.ts):
+the board goes from the current line to the next card's line the way a player would —
+take back to the common ancestor, play forward ply by ply, the final (opponent's) ply
+slower and left as the last-move highlight. A line that shares nothing, or a rewind
+longer than ten plies, fades and re-appears with only its last ply animated instead.
+`useBoard` gained `animationMs` for this; chessground reads `animation.duration` per
+`set`, so it must travel with the fen. Timings live in
+[rehearse/timings.ts](../../apps/web/src/lib/rehearse/timings.ts). Every sequence
+runs under one `AbortController`; an interrupted transition stops where it is and the
+next one re-plans from the board's real history.
+
+**Miss flow** — reveal → note (if the correct move has a comment; the S3 `StudyNote`)
+→ retry (only the correct move advances, no re-grade). Interference and the
+refutation prompt are the Phase 9d ones. Feedback: green/red wash + shake
+(`BoardCue`), optional sound (off by default, `meta` key `rehearse.sound`).
+
+**Engine gating per phase** ([engine](engine.md#who-gates-what)): gated in every
+card phase including the transition (its end position *is* the next card). Ungated
+only in Expand, and — when the session's *eval after answer* toggle is on — for a
+short pause after a correct answer showing the **eval bar only**: the PV's second ply
+is the hero's next move and may be a later card.
+
+**Expand variations** — [rehearse/expand.ts](../../apps/web/src/lib/rehearse/expand.ts)
+(pure, tested): walks the scope's opponent-turn positions shallow-first and offers
+replies the study does *not* cover (`uncoveredReplies` excludes live, dropped **and**
+shadow SANs — the auto-expansion rule). Source order: explorer → engine MultiPV →
+ECO book → nothing; a cold explorer never blocks (offline works). The user picks a
+deviation, the board plays it, and their answer on the board is saved through the
+existing batch endpoint (opponent ply uncarded, hero ply carded, `lineTags` inherited
+so the new card is in the chapter's scope next time). Eval bar always visible;
+PV lines and board arrows behind "Show suggestions", off by default. Unlike 9c
+auto-expansion nothing is written silently, so book/engine sources are acceptable.
+
+**Extensions survive re-import** — `moves.origin`
+([data-model](../02-architecture/data-model.md#moves)): everything the study sync
+writes is `'study'`; everything the app writes is `'user'`. The sync keeps `'user'`
+edges while their parent is still connected to the root, **adopts** them if a later
+study version contains the same edge (row, card and attempts survive), **parks** them
+(dropped, card kept) if the study now plays a different hero move at that parent — the
+study owns the prep slot — and deletes them only when the line above them is gone.
+Rules and counts in [services](../04-api/services.md#syncrepertoirefromtree--a-diff-not-a-reload);
+the browser colours extensions apart (`TreeView markOrigin`) and the update modal
+reports kept / adopted / removed / demoted.
+
 ## Not built
 
+- Demoted extensions are not restorable from the session UI (undrop in the browser
+  runs the one-prep check, as for any dropped move).
+- The three older drill implementations have not adopted `missFlow.ts` /
+  `useLineTransition`; they still snap-load positions.
 - Export of a whole study is still a single game (`exportPgn` unchanged) — debt
   against the "no lock-in" quality.
 - Detached `[FEN]` chapters are rejected rather than imported as separate studies.

@@ -17,6 +17,7 @@
  *   #/prepare               → "Prepare against…" wizard (Flow F2)
  *   #/rashid-lab            → Rashid dev harness (no nav entry; type the hash)
  *   #/study/:id?at=<fenKey> → study browser (Study S4), optionally at a position
+ *   #/rehearse/:id[/:chapterTag][?mode=expand] → rehearsal session (Study S5)
  *
  * Flow F2: walker hashes also accept `guided=1`, marking a guided-prepare
  * session (line-first traversal + lock-in; see WalkerSession).
@@ -98,6 +99,12 @@ export function viewToHash(v: View): string {
       return '#/rashid-lab';
     case 'study-browser':
       return `#/study/${v.repertoireId}${v.fenKey ? `?at=${encodeURIComponent(v.fenKey)}` : ''}`;
+    case 'rehearse': {
+      // Chapter tags are free text (spaces, colons, slashes) — encode them.
+      const tag = v.chapterTag ? `/${encodeURIComponent(v.chapterTag)}` : '';
+      const mode = v.mode === 'expand' ? '?mode=expand' : '';
+      return `#/rehearse/${v.repertoireId}${tag}${mode}`;
+    }
   }
 }
 
@@ -154,6 +161,25 @@ export function hashToView(hash: string): View | null {
       if (!id) return null;
       const at = new URLSearchParams(query).get('at');
       return { kind: 'study-browser', repertoireId: id, ...(at ? { fenKey: at } : {}) };
+    }
+    case 'rehearse': {
+      if (!id) return null;
+      let chapterTag: string | undefined;
+      if (arg) {
+        try {
+          chapterTag = decodeURIComponent(arg);
+        } catch {
+          chapterTag = arg;
+        }
+      }
+      // Anything but exactly `expand` is the cards session — total, like `guided`.
+      const expand = new URLSearchParams(query).get('mode') === 'expand';
+      return {
+        kind: 'rehearse',
+        repertoireId: id,
+        ...(chapterTag ? { chapterTag } : {}),
+        ...(expand ? { mode: 'expand' as const } : {}),
+      };
     }
     default:
       return null;

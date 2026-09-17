@@ -65,7 +65,7 @@ is weak rather than uniformly. Nothing is built for it; the log it would read
 not new plumbing. Design note in
 [repertoire-growth](../03-domain/repertoire-growth.md#mistake-rehearsal).
 
-## Study flow (S1–S4)
+## Study flow (S1–S5)
 
 Preparation moves to lichess studies; the app rehearses them. Detail in
 [study](../03-domain/study.md).
@@ -77,9 +77,13 @@ Preparation moves to lichess studies; the app rehearses them. Detail in
 | **S3** ✅ | Web: Studies home as the default landing (`#/`; repertoire list → `#/repertoires`), upload/update modal with the sync summary, note-on-miss pause in all three drill implementations |
 | **S4** ✅ | Study browser (`#/study/:id`: shared `TreeView`, note on the current move, eval + Rashid probe off by default, keyboard stepping) and the Rashid study scan (`store/rashidScan.ts`: outlives the view, alternates included, findings list, cache reload) |
 
-Debt introduced: whole-study export is still single-game (`exportPgn` unchanged), and
+| **S5** ✅ | One-click chapter rehearsal (`#/rehearse/:id/:chapter`: shuffled hero moves, stub cards, animated line transitions, hint/skip/note/retry, summary, resume), Expand variations (uncovered opponent replies → record your move, engine hidden by default), and `moves.origin` (migration `0012`) so those extensions survive re-import (kept / adopted / demoted / removed) |
+
+Debt introduced: whole-study export is still single-game (`exportPgn` unchanged);
 demoted alternates share `is_dropped` with the user's own drops (see study.md for the
-`prep_role` escape hatch).
+`prep_role` escape hatch); S5 is a **fourth drill implementation** — the extracted
+`missFlow.ts` / `useLineTransition` are the consolidation path and the older three have
+not adopted them yet.
 
 ## In progress — Rashid (trap-finding layer)
 
