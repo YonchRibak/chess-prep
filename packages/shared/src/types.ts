@@ -64,7 +64,14 @@ export interface Move {
    * never walked by the build seed, never drilled, never exported.
    */
   isRefutation: boolean;
+  /**
+   * Study S5: `'study'` = owned by the lichess PGN (a re-import may delete it);
+   * `'user'` = recorded in the app, survives re-import as an "extension".
+   */
+  origin: MoveOrigin;
 }
+
+export type MoveOrigin = 'study' | 'user';
 
 export interface SrsCard {
   id: string;

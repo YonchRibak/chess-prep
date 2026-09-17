@@ -99,6 +99,15 @@ export const moves = pgTable(
     // because every one of those call sites must exclude it — an invariant
     // carried by a tag would fail silently the first time one forgot.
     isRefutation: boolean('is_refutation').notNull().default(false),
+    // Study S5: who owns this edge on a study-sourced repertoire. `'study'`
+    // means the lichess PGN put it here and a re-import may delete it when
+    // the study drops it; `'user'` means the app recorded it (Expand
+    // variations, drill-pauses-for-build) and a re-import must keep it — an
+    // "extension". Default `'user'` so every existing write path is right
+    // without touching it; only the study sync writes `'study'`. A column,
+    // not a tag, for the same reason as `is_refutation`: the sync's "may I
+    // delete this?" question must never depend on a call site remembering.
+    origin: text('origin').notNull().default('user'),
   },
   (t) => [unique('uniq_parent_san').on(t.repertoireId, t.parentPositionId, t.san)],
 );

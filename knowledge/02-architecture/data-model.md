@@ -4,7 +4,7 @@ Schema: [apps/api/src/db/schema.ts](../../apps/api/src/db/schema.ts) (Drizzle).
 Migrations: [apps/api/drizzle/](../../apps/api/drizzle/) — `0000` base, `0001`, `0002`,
 `0003_drop_branch`, `0004_user_settings`, `0005_line_tags`, `0006_explorer_entries`,
 `0007_auto_expand`, `0008_drill_attempts`, `0009_refutations`,
-`0010_explorer_snapshot`, `0011_study_source`.
+`0010_explorer_snapshot`, `0011_study_source`, `0012_move_origin`.
 
 The flexibility Lotus lacks comes from modeling repertoires as **position-keyed move
 trees**, not linear lines.
@@ -37,7 +37,8 @@ read it through `mergeDrillRules()` rather than assuming fields exist.
 ### `moves`
 The edge, and the unit of prep:
 `repertoire_id`, `parent_position_id`, `child_position_id`, `san`, `uci`, `comment`,
-`annotation`, `is_main_line`, `priority`, `is_dropped`, `line_tags[]`, `is_refutation`.
+`annotation`, `is_main_line`, `priority`, `is_dropped`, `line_tags[]`, `is_refutation`,
+`origin`.
 
 Unique `uniq_parent_san (repertoire_id, parent_position_id, san)` — no duplicate SAN
 from one parent, but **multiple distinct children per parent are intentionally allowed**
@@ -66,6 +67,17 @@ position. It is a column rather than a `line_tags` value because *every* consume
 exclude it, and a forgotten tag check turns a punishment line into a drilled card
 silently. Full list of exclusions:
 [srs-drilling](../03-domain/srs-drilling.md#refutation-shadow-lines-phase-9d).
+
+`origin` (migration `0012`, Study S5) says who owns an edge on a study-sourced
+repertoire: `'study'` — the lichess PGN put it there and a re-import may delete it;
+`'user'` — the app recorded it (Expand variations), so it is an **extension** that a
+re-import must keep. Default `'user'`, so every existing write path is correct untouched
+and only the study sync writes `'study'`; the migration backfills every pre-existing move
+on a study repertoire to `'study'` (before this column they were lost on re-import
+anyway, so nothing regresses). Hand-built repertoires are all `'user'` and never read it.
+A column, not a tag, for the same reason as `is_refutation`: the sync's "may I delete
+this?" must not depend on a call site remembering. Rules in
+[services](../04-api/services.md#syncrepertoirefromtree--a-diff-not-a-reload).
 
 ### `srs_cards`
 One card per prep move. Stores raw FSRS state — `due`, `stability`, `difficulty`,

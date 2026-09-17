@@ -48,6 +48,7 @@ function move(parent: RepertoirePosition, child: RepertoirePosition, san: string
     isDropped: false,
     lineTags: ['Main'],
     isRefutation: false,
+    origin: 'user',
     ...flags,
   };
 }

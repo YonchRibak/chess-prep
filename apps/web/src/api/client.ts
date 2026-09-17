@@ -2,6 +2,7 @@ import type {
   Color,
   DrillRules,
   ExplorerEntry,
+  MoveOrigin,
   OpeningId,
   RepertoireSource,
   StudySyncSummary,
@@ -65,6 +66,11 @@ export interface RepertoireMove {
    * queue would drill the user on a move they chose not to play.
    */
   isRefutation: boolean;
+  /**
+   * Study S5: `'study'` edges belong to the lichess PGN and a re-import may
+   * delete them; `'user'` edges were recorded in the app and survive.
+   */
+  origin: MoveOrigin;
 }
 
 export interface RepertoireFull extends RepertoireSummary {
@@ -87,6 +93,7 @@ export interface AddedMove {
   isDropped: boolean;
   lineTags: string[];
   isRefutation: boolean;
+  origin: MoveOrigin;
   childPositionCreated: boolean;
 }
 

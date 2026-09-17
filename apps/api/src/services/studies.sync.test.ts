@@ -257,4 +257,102 @@ describe('Study S2 — import and re-import sync (integration)', () => {
       patchMove(DEFAULT_USER_ID, repertoire.id, e5.id, { isDropped: false }),
     ).resolves.toBeUndefined();
   });
+  describe('S5 extensions (moves.origin)', () => {
+    // The user records a deviation + reply in the app: 2...Nc6 3. d4, which
+    // the study does not have. Both rows are `origin: 'user'`; d4 is carded.
+    async function importWithExtension() {
+      const { appendLine } = await import('./repertoires.js');
+      const { repertoire: v1 } = await importV1();
+      const res = await appendLine(DEFAULT_USER_ID, v1.id, {
+        fromFenKey: fenKey(keyAfter('1. e4 c5 2. Nf3')),
+        sans: ['Nc6', 'd4'],
+      });
+      expect(res.added).toBe(2);
+      const { getRepertoire } = await import('./repertoires.js');
+      const rep = await getRepertoire(DEFAULT_USER_ID, v1.id);
+      const nc6 = edge(rep, '1. e4 c5 2. Nf3', 'Nc6')!;
+      const d4 = edge(rep, '1. e4 c5 2. Nf3 Nc6', 'd4')!;
+      expect(nc6.origin).toBe('user');
+      expect(d4.origin).toBe('user');
+      expect(rep.moves.find((m) => m.san === 'e4')!.origin).toBe('study');
+      const d4Card = (await cardsByMoveId([d4.id])).get(d4.id);
+      expect(d4Card).toBeDefined();
+      return { rep, nc6, d4, d4Card: d4Card! };
+    }
+
+    it('keeps an extension, its card and its positions across an identical re-import', async () => {
+      const { updateStudy } = await import('./studies.js');
+      const { rep, nc6, d4, d4Card } = await importWithExtension();
+
+      const { repertoire: after, summary } = await updateStudy(DEFAULT_USER_ID, rep.id, { pgn: STUDY_V1 });
+      expect(summary).toMatchObject({
+        movesRemoved: 0,
+        positionsRemoved: 0,
+        extensionsKept: 2,
+        extensionsAdopted: 0,
+        extensionsRemoved: 0,
+        extensionsDemoted: [],
+      });
+      expect(after.moves.find((m) => m.id === nc6.id)?.origin).toBe('user');
+      expect(after.moves.find((m) => m.id === d4.id)?.origin).toBe('user');
+      expect(after.positions.some((p) => p.id === d4.childPositionId)).toBe(true);
+      expect((await cardsByMoveId([d4.id])).get(d4.id)).toBe(d4Card);
+    });
+
+    it('is adopted by the study when a later version contains the same line — ids and card unchanged', async () => {
+      const { updateStudy } = await import('./studies.js');
+      const { rep, nc6, d4, d4Card } = await importWithExtension();
+
+      const v2 = chapter('Sicilian', '1. e4 c5 2. Nf3 (2. Nc3 Nc6) d6 (2... Nc6 3. d4)') + '\n' + B_V1;
+      const { repertoire: after, summary } = await updateStudy(DEFAULT_USER_ID, rep.id, { pgn: v2 });
+      expect(summary.extensionsAdopted).toBe(2);
+      expect(summary.extensionsKept).toBe(0);
+      expect(summary.movesAdded).toBe(0);
+      expect(after.moves.find((m) => m.id === nc6.id)?.origin).toBe('study');
+      expect(after.moves.find((m) => m.id === d4.id)?.origin).toBe('study');
+      expect((await cardsByMoveId([d4.id])).get(d4.id)).toBe(d4Card);
+    });
+
+    it('is demoted (dropped, card kept) when the study now plays a different hero move there', async () => {
+      const { updateStudy } = await import('./studies.js');
+      const { rep, d4, d4Card } = await importWithExtension();
+
+      const v2 = chapter('Sicilian', '1. e4 c5 2. Nf3 (2. Nc3 Nc6) d6 (2... Nc6 3. Bb5)') + '\n' + B_V1;
+      const { repertoire: after, summary } = await updateStudy(DEFAULT_USER_ID, rep.id, { pgn: v2 });
+      expect(summary.extensionsAdopted).toBe(1); // Nc6
+      expect(summary.extensionsKept).toBe(1); // d4
+      expect(summary.extensionsDemoted).toEqual([
+        { parentFenKey: fenKey(keyAfter('1. e4 c5 2. Nf3 Nc6')), san: 'd4', keptSan: 'Bb5' },
+      ]);
+      const d4After = after.moves.find((m) => m.id === d4.id)!;
+      expect(d4After.isDropped).toBe(true);
+      expect(d4After.origin).toBe('user');
+      const parent = d4After.parentPositionId;
+      const liveHero = after.moves.filter(
+        (m) => m.parentPositionId === parent && !m.isDropped && !m.isRefutation,
+      );
+      expect(liveHero.map((m) => m.san)).toEqual(['Bb5']);
+      expect((await cardsByMoveId([d4.id])).get(d4.id)).toBe(d4Card);
+    });
+
+    it('removes an extension whose parent line the study dropped', async () => {
+      const { updateStudy } = await import('./studies.js');
+      const { rep, nc6, d4 } = await importWithExtension();
+
+      const { repertoire: after, summary } = await updateStudy(DEFAULT_USER_ID, rep.id, { pgn: B_V1 });
+      expect(summary.extensionsRemoved).toBe(2);
+      expect(summary.extensionsKept).toBe(0);
+      expect(after.moves.find((m) => m.id === nc6.id)).toBeUndefined();
+      expect(after.moves.find((m) => m.id === d4.id)).toBeUndefined();
+      expect(after.positions.some((p) => p.id === d4.childPositionId)).toBe(false);
+      expect((await cardsByMoveId([d4.id])).size).toBe(0);
+    });
+
+    it('exports extensions as ordinary prep', async () => {
+      const { exportPgn } = await import('./repertoires.js');
+      const { rep } = await importWithExtension();
+      const pgn = await exportPgn(DEFAULT_USER_ID, rep.id);
+      expect(pgn).toMatch(/Nc6 3\. d4/);
+    });
+  });
 });

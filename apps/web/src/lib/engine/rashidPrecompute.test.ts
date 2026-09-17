@@ -40,6 +40,7 @@ function move(
     isDropped: false,
     lineTags: [],
     isRefutation: false,
+    origin: 'user',
     ...flags,
   };
 }

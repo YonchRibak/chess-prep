@@ -219,12 +219,23 @@ one transaction:
 2. Moves, matched on `(parent_position_id, san)`:
    - present in both → update only the fields that differ (comment, annotation,
      isMainLine, uci, lineTags, isDropped); a shadow (`is_refutation`) edge the study
-     now contains is promoted to prep, same rule as `promoteIfShadowed`;
-   - only in the tree → bulk insert;
+     now contains is promoted to prep, same rule as `promoteIfShadowed`; an extension
+     (`origin = 'user'`) the study now contains is **adopted** — `origin` flips to
+     `'study'`, row/card/attempts survive (`extensionsAdopted`);
+   - only in the tree → bulk insert with `origin: 'study'`;
    - only in the table → delete (cards and attempts cascade) **unless it is a
-     refutation shadow line**, which is user data the study cannot know about.
-3. Positions the tree no longer has are deleted unless a surviving shadow line still
-   stands on them.
+     refutation shadow line or an extension**, both user data the study cannot know
+     about. An extension is kept only while its parent is still connected to the root
+     over the surviving edges (dropped ones included, so a demoted subtree stays
+     restorable); one whose parent line the study removed is deleted
+     (`extensionsRemoved`) — left in place it would enter the queue builders as a
+     phantom card at depth 0.
+   - **hero collision (S5)**: where the tree has a live hero move, a kept extension
+     playing a different hero SAN at the same parent is parked — `is_dropped`, card kept
+     — and reported in `extensionsDemoted`. The study owns the prep slot, exactly as the
+     prep policy treats the study's own alternates.
+3. Positions the tree no longer has are deleted unless a surviving shadow line or
+   extension still stands on them.
 4. Cards: eligible = hero-turn parent ∧ not dropped ∧ not refutation ∧ parent in
    `liveReachablePositions(tree)`. Inserted with `onConflictDoNothing`, so an existing
    card is *kept* (`cardsKept`) and only new ones count as `cardsCreated`. Cards on a

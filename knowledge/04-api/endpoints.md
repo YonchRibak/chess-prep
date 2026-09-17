@@ -42,7 +42,7 @@ validation error from the service rather than a crash.
 | `DELETE /repertoires/:id/moves/:moveId` | — | `204` |
 | `POST /repertoires/import` | `{ name, color, pgn, tags? }` | `201` |
 | `POST /repertoires/import-study` | `{ pgn, color, name?, tags? }` | `201 { repertoire: RepertoireFull, summary: StudySyncSummary }`. Study S2: multi-chapter PGN → one repertoire with `source` provenance; `name` defaults to the study's name |
-| `POST /repertoires/:id/import-study` | `{ pgn }` | `200 { repertoire, summary }`. Re-sync from a newer export: diff, not reload. `400` if the repertoire is not study-sourced or the study's root position changed |
+| `POST /repertoires/:id/import-study` | `{ pgn }` | `200 { repertoire, summary }`. Re-sync from a newer export: diff, not reload. `400` if the repertoire is not study-sourced or the study's root position changed. S5: the summary also reports `extensionsKept` / `extensionsAdopted` / `extensionsRemoved` / `extensionsDemoted[]` for app-recorded moves (`origin: 'user'`, present on every `RepertoireMove` / `AddedMove`) |
 | `PATCH /repertoires/:id/drill-rules` | partial `DrillRules` | updated rules |
 | `GET /repertoires/:id/export` | — | PGN text, `Content-Type: application/x-chess-pgn; charset=utf-8` |
 

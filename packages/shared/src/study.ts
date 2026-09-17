@@ -110,6 +110,22 @@ export interface StudySyncSummary {
   demoted: StudyDemotion[];
   /** User-authored refutation shadow lines left untouched by the sync. */
   refutationsKept: number;
+  /** S5 extensions (`origin: 'user'`) the study still lacks and the sync kept. */
+  extensionsKept: number;
+  /** Extensions the study now contains itself — row and card kept, now `'study'`. */
+  extensionsAdopted: number;
+  /** Extensions deleted because nothing live reaches their parent any more. */
+  extensionsRemoved: number;
+  /** Extensions parked (`isDropped`) because the study now plays another hero move there. */
+  extensionsDemoted: StudyExtensionDemotion[];
+}
+
+export interface StudyExtensionDemotion {
+  parentFenKey: FenKey;
+  /** The user's extension move, now dropped. */
+  san: string;
+  /** The study's move that owns the prep slot. */
+  keptSan: string;
 }
 
 /* ---------------- chapters ---------------- */

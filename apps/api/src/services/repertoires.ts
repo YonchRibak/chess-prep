@@ -15,6 +15,7 @@ import {
   type Color,
   type DrillRules,
   type FenKey,
+  type MoveOrigin,
   type RepertoireSource,
   type RepertoireTree,
   type TreeMoveInput,
@@ -64,6 +65,7 @@ export interface RepertoireFull extends RepertoireSummary {
     isDropped: boolean;
     lineTags: string[];
     isRefutation: boolean;
+    origin: MoveOrigin;
   }[];
 }
 
@@ -213,6 +215,7 @@ export async function getRepertoire(userId: string, id: string): Promise<Reperto
       isDropped: m.isDropped,
       lineTags: m.lineTags,
       isRefutation: m.isRefutation,
+      origin: m.origin as MoveOrigin,
     })),
   };
 }
@@ -288,6 +291,7 @@ export interface AddedMove {
   isDropped: boolean;
   lineTags: string[];
   isRefutation: boolean;
+  origin: MoveOrigin;
   /** True if this call also created a new position node (vs. linking to existing). */
   childPositionCreated: boolean;
 }
@@ -435,6 +439,7 @@ export async function addMove(
       isDropped: moveRow.isDropped,
       lineTags: moveRow.lineTags,
       isRefutation: moveRow.isRefutation,
+      origin: moveRow.origin as MoveOrigin,
       childPositionCreated,
     };
   });
@@ -1179,6 +1184,7 @@ export async function getRepertoireWithTx(tx: Tx, userId: string, id: string): P
       isDropped: m.isDropped,
       lineTags: m.lineTags,
       isRefutation: m.isRefutation,
+      origin: m.origin as MoveOrigin,
     })),
   };
 }

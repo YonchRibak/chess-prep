@@ -20,6 +20,12 @@
  * - **Refutation shadow lines survive.** They are user data written from the
  *   drill, not study content; deleting them because the study "doesn't have
  *   them" would erase the mistake history they document.
+ * - **Extensions survive (S5).** A move with `origin = 'user'` was recorded in
+ *   the app (Expand variations), so the study cannot know about it. It is kept
+ *   with its card while its parent is still connected to the root; the study
+ *   *adopts* it if a later version contains the same edge, and *demotes* it
+ *   (dropped, card kept) if the study now plays a different hero move at that
+ *   parent — the study owns the prep slot.
  */
 import { createHash } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -157,6 +163,33 @@ function sameTags(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((t, i) => t === b[i]);
 }
 
+/** Position ids reachable from `rootId` over the given edges (dropped ones included). */
+function reachableFrom(
+  rootId: string | undefined,
+  edges: Array<{ parent: string | undefined; child: string | undefined }>,
+): Set<string> {
+  const out = new Set<string>();
+  if (!rootId) return out;
+  const children = new Map<string, string[]>();
+  for (const e of edges) {
+    if (!e.parent || !e.child) continue;
+    const list = children.get(e.parent);
+    if (list) list.push(e.child);
+    else children.set(e.parent, [e.child]);
+  }
+  const queue = [rootId];
+  out.add(rootId);
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    for (const c of children.get(id) ?? []) {
+      if (out.has(c)) continue;
+      out.add(c);
+      queue.push(c);
+    }
+  }
+  return out;
+}
+
 /**
  * Bring the repertoire's positions/moves/cards in line with `parsed.tree`
  * inside the caller's transaction. Returns what changed.
@@ -179,6 +212,10 @@ export async function syncRepertoireFromTree(
     cardsKept: 0,
     demoted: parsed.demoted,
     refutationsKept: 0,
+    extensionsKept: 0,
+    extensionsAdopted: 0,
+    extensionsRemoved: 0,
+    extensionsDemoted: [],
   };
 
   /* positions */
@@ -237,6 +274,7 @@ export async function syncRepertoireFromTree(
         priority: m.priority,
         isDropped: Boolean(m.isDropped),
         lineTags,
+        origin: 'study',
       });
       insertCandidates.push({ parentFenKey: m.parentFenKey, isDropped: Boolean(m.isDropped) });
       continue;
@@ -254,6 +292,12 @@ export async function syncRepertoireFromTree(
     // A shadow edge the study now contains is prep — same promotion rule as
     // appendLine's promoteIfShadowed.
     if (existing.isRefutation) patch.isRefutation = false;
+    // S5: the study caught up with an extension the user recorded in the app.
+    // The study adopts the row — id, card and attempt history all survive.
+    if (existing.origin !== 'study') {
+      patch.origin = 'study';
+      summary.extensionsAdopted += 1;
+    }
     if (Object.keys(patch).length > 0) {
       await tx.update(moves).set(patch).where(eq(moves.id, existing.id));
       summary.movesUpdated += 1;
@@ -273,18 +317,65 @@ export async function syncRepertoireFromTree(
 
   /* removals */
   const stale = existingMoves.filter((m) => !desiredEdges.has(`${m.parentPositionId}::${m.san}`));
-  const toDelete = stale.filter((m) => !m.isRefutation).map((m) => m.id);
-  summary.refutationsKept = stale.length - toDelete.length;
+  const keptRefutations = stale.filter((m) => m.isRefutation);
+  summary.refutationsKept = keptRefutations.length;
+  // S5: extensions (recorded in the app) survive too — but only while
+  // something still connects them to the root. An extension whose parent line
+  // the study removed can never be rehearsed, and left in place it would
+  // enter the queue builders at depth 0 as a phantom card.
+  const staleExtensions = stale.filter((m) => !m.isRefutation && m.origin === 'user');
+  const studyEdges = existingMoves.filter((m) =>
+    desiredEdges.has(`${m.parentPositionId}::${m.san}`),
+  );
+  const rootId = posIdByKey.get(tree.rootFenKey);
+  const connected = reachableFrom(rootId, [
+    ...tree.moves.map((m) => ({
+      parent: posIdByKey.get(m.parentFenKey),
+      child: posIdByKey.get(m.childFenKey),
+    })),
+    ...studyEdges.map((m) => ({ parent: m.parentPositionId, child: m.childPositionId })),
+    ...staleExtensions.map((m) => ({ parent: m.parentPositionId, child: m.childPositionId })),
+  ]);
+  const keptExtensions = staleExtensions.filter((m) => connected.has(m.parentPositionId));
+  const keptIds = new Set([...keptRefutations, ...keptExtensions].map((m) => m.id));
+  const toDelete = stale.filter((m) => !keptIds.has(m.id)).map((m) => m.id);
+  summary.extensionsRemoved = staleExtensions.length - keptExtensions.length;
+  summary.extensionsKept = keptExtensions.length;
   for (const batch of chunks(toDelete)) {
     await tx.delete(moves).where(inArray(moves.id, batch));
   }
   summary.movesRemoved = toDelete.length;
 
-  // Positions the study no longer has, unless a surviving shadow line still
-  // stands on them (its parent is prep, but its children are shadow-only).
-  const keptRefutations = stale.filter((m) => m.isRefutation);
+  // S5 hero collision: the study owns the prep slot. Where the study now has
+  // a live hero move, a kept extension playing something else at the same
+  // parent is parked (dropped, card kept) — the same rule the prep policy
+  // applies to the study's own alternates. Its subtree stays connected
+  // (reachability above walks dropped edges too) so an undrop restores it.
+  const studyHeroSanByParent = new Map<string, string>();
+  for (const m of tree.moves) {
+    if (m.isDropped) continue;
+    const parentId = posIdByKey.get(m.parentFenKey);
+    if (!parentId) continue;
+    if (isUserMove(fenTurn(fullFenByKey.get(m.parentFenKey)!), rep.color)) {
+      studyHeroSanByParent.set(parentId, m.san);
+    }
+  }
+  const fenKeyByPosId = new Map(existingPositions.map((p) => [p.id, p.fenKey as FenKey]));
+  for (const m of keptExtensions) {
+    const keptSan = studyHeroSanByParent.get(m.parentPositionId);
+    if (!keptSan || m.isDropped) continue;
+    await tx.update(moves).set({ isDropped: true }).where(eq(moves.id, m.id));
+    summary.extensionsDemoted.push({
+      parentFenKey: fenKeyByPosId.get(m.parentPositionId)!,
+      san: m.san,
+      keptSan,
+    });
+  }
+
+  // Positions the study no longer has, unless a surviving shadow line or
+  // extension still stands on them.
   const pinned = new Set<string>();
-  for (const m of keptRefutations) {
+  for (const m of [...keptRefutations, ...keptExtensions]) {
     pinned.add(m.parentPositionId);
     pinned.add(m.childPositionId);
   }
