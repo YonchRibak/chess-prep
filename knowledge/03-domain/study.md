@@ -154,11 +154,15 @@ cards return once at the end of the session.
 
 **Transitions** — [lineTransition.ts](../../apps/web/src/lib/chess/lineTransition.ts)
 (pure planner, tested) + [useLineTransition.ts](../../apps/web/src/lib/chess/useLineTransition.ts):
-the board goes from the current line to the next card's line the way a player would —
-take back to the common ancestor, play forward ply by ply, the final (opponent's) ply
-slower and left as the last-move highlight. A line that shares nothing, or a rewind
-longer than ten plies, fades and re-appears with only its last ply animated instead.
-`useBoard` gained `animationMs` for this; chessground reads `animation.duration` per
+by default (`'last-ply'`) the board is set to the position *before* the next card's
+final ply with no animation and only that ply — the opponent's move the card asks
+about — glides in and stays as the last-move highlight, like stepping to a position
+on lichess; a one-ply continuation simply animates. The **replay** toggle in the strip
+(`meta` key `rehearse.fullReplay`) switches to `'full'`: take back to the common
+ancestor, play forward ply by ply, a line sharing nothing or a rewind over ten plies
+snapping instead. "▶ Replay line" under the board replays the current line on demand
+(board locked meanwhile), and "Show moves" toggles the SAN list, off by default
+(`rehearse.showLine`). `useBoard` gained `animationMs` for this; chessground reads `animation.duration` per
 `set`, so it must travel with the fen. Timings live in
 [rehearse/timings.ts](../../apps/web/src/lib/rehearse/timings.ts). Every sequence
 runs under one `AbortController`; an interrupted transition stops where it is and the
@@ -166,8 +170,9 @@ next one re-plans from the board's real history.
 
 **Miss flow** — reveal → note (if the correct move has a comment; the S3 `StudyNote`)
 → retry (only the correct move advances, no re-grade). Interference and the
-refutation prompt are the Phase 9d ones. Feedback: green/red wash + shake
-(`BoardCue`), optional sound (off by default, `meta` key `rehearse.sound`).
+refutation prompt are the Phase 9d ones. Feedback is deliberately quiet — the panel
+text and an optional sound (off by default, `meta` key `rehearse.sound`); no flashes
+or shakes on the board, and no idle timer of any kind.
 
 **Engine gating per phase** ([engine](engine.md#who-gates-what)): gated in every
 card phase including the transition (its end position *is* the next card). Ungated

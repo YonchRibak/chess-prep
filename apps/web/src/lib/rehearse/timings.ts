@@ -10,8 +10,6 @@ export const PLY_MS = 180;
 export const LAST_PLY_MS = 350;
 /** Glide of one undone ply while rewinding to a common ancestor. */
 export const UNDO_PLY_MS = 120;
-/** Fade shown instead of a long rewind when the next line shares nothing useful. */
-export const NEW_LINE_FADE_MS = 220;
 /** Pause after a correct answer before the next card starts moving. */
 export const CORRECT_PAUSE_MS = 350;
 /** How long the correct move stays on the board after a miss before retry. */

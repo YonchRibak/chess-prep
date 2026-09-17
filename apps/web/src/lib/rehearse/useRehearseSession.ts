@@ -87,7 +87,8 @@ const EMPTY_STATS: RehearseStats = {
 
 /** How long the eval bar stays up after a correct answer when the toggle is on. */
 const EVAL_PEEK_MS = 1400;
-const CUE_MS = 450;
+const FULL_REPLAY_KEY = 'rehearse.fullReplay';
+const SHOW_LINE_KEY = 'rehearse.showLine';
 
 export const lastChapterKey = (repertoireId: string) => `rehearse.last.${repertoireId}`;
 
@@ -106,7 +107,14 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
   const [items, setItems] = useState<RehearseItem[]>([]);
   const [stats, setStats] = useState<RehearseStats>(EMPTY_STATS);
   const [missed, setMissed] = useState<number[]>([]);
-  const [cue, setCue] = useState<'correct' | 'wrong' | null>(null);
+  // Transition style: snap + animate the last ply (default) or replay lines in full.
+  const [fullReplay, setFullReplay] = useState(false);
+  const fullReplayRef = useRef(false);
+  fullReplayRef.current = fullReplay;
+  // The SAN list under the board, off by default.
+  const [showLine, setShowLine] = useState(false);
+  // A "Replay line" is running: the board stays locked until it ends.
+  const [replaying, setReplaying] = useState(false);
   const [evalAfterAnswer, setEvalAfterAnswer] = useState(
     () => mergeDrillRules(repertoire.drillRules).evalAfterAnswer,
   );
@@ -157,10 +165,10 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
     return ctl;
   }
 
-  function flash(kind: 'correct' | 'wrong') {
-    setCue(kind);
+  // Feedback is deliberately quiet: the panel text, and a sound if opted in.
+  // No flashes, no shakes — the board should feel like a board.
+  function feedback(kind: 'correct' | 'wrong') {
     if (soundRef.current) sounds[kind]();
-    setTimeout(() => setCue((c) => (c === kind ? null : c)), CUE_MS);
   }
 
   const swallow = (e: unknown) => {
@@ -178,7 +186,12 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
     cardIndexRef.current = i;
     hintedRef.current = false;
     setPhase({ kind: 'transition', index: i });
-    await transition.animateTo(it.pathSans, it.parentFullFen, signal);
+    await transition.animateTo(
+      it.pathSans,
+      it.parentFullFen,
+      signal,
+      fullReplayRef.current ? 'full' : 'last-ply',
+    );
     setPhase({ kind: 'prompt', index: i, hint: false });
   }
 
@@ -257,7 +270,7 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
         bestStreak: Math.max(s.bestStreak, s.streak + 1),
       }));
     }
-    flash('correct');
+    feedback('correct');
     setPhase({ kind: 'correct', index: i, showNote: false });
     await sleep(CORRECT_PAUSE_MS + (evalAfterAnswer ? EVAL_PEEK_MS : 0), signal);
     await advance(i, signal);
@@ -270,7 +283,7 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
     void logAttempt({ moveId: it.move.id, repertoireId: repertoire.id, playedSan: userSan, wasCorrect: false });
     setStats((s) => ({ ...s, wrong: s.wrong + 1, streak: 0 }));
     setMissed((m) => (m.includes(i) ? m : [...m, i]));
-    flash('wrong');
+    feedback('wrong');
     const rep = useAppStore.getState().active ?? repertoire;
     const interference =
       describeInterference(detectInterference(rep, it.parentPosition.id, userSan)) ?? undefined;
@@ -323,6 +336,27 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
       abortRef.current?.abort();
       setPhase({ ...phase, showNote: true });
     }
+  }
+
+  /** On demand: show how the current position is reached, then wait again. */
+  function replayLine() {
+    const p = phase;
+    let sans: readonly string[] | undefined;
+    let fullFen: string | undefined;
+    if (p.kind === 'prompt') {
+      sans = itemsRef.current[p.index]?.pathSans;
+      fullFen = itemsRef.current[p.index]?.parentFullFen;
+    } else if (p.kind === 'expand' && p.step === 'pick') {
+      sans = targetsRef.current[p.targetIndex]?.pathSans;
+      fullFen = targetsRef.current[p.targetIndex]?.position.fullFen;
+    }
+    if (!sans || !fullFen || sans.length === 0) return;
+    const ctl = startSequence();
+    setReplaying(true);
+    transition
+      .replay(sans, fullFen, ctl.signal)
+      .catch(swallow)
+      .finally(() => setReplaying(false));
   }
 
   function hint() {
@@ -450,9 +484,10 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
       : undefined;
 
   const boardMovable: 'white' | 'black' | null =
-    phase.kind === 'prompt' ||
-    (phase.kind === 'miss' && phase.stage === 'retry') ||
-    (phase.kind === 'expand' && phase.step === 'your-move')
+    !replaying &&
+    (phase.kind === 'prompt' ||
+      (phase.kind === 'miss' && phase.stage === 'retry') ||
+      (phase.kind === 'expand' && phase.step === 'your-move'))
       ? heroColor
       : null;
 
@@ -470,6 +505,8 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
 
   useEffect(() => {
     void loadSoundPref().then(setSound);
+    void getMeta(FULL_REPLAY_KEY).then((v) => setFullReplay(v === '1')).catch(() => {});
+    void getMeta(SHOW_LINE_KEY).then((v) => setShowLine(v === '1')).catch(() => {});
   }, []);
 
   // Kick off on mount.
@@ -492,8 +529,10 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
     items,
     stats,
     missed,
-    cue,
     shapes,
+    replaying,
+    fullReplay,
+    showLine,
     boardMovable,
     heroColor,
     heroToMove,
@@ -527,6 +566,17 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
         void saveSoundPref(next);
       },
       toggleSuggestions: () => setShowSuggestions((v) => !v),
+      replayLine,
+      toggleFullReplay: () => {
+        const next = !fullReplay;
+        setFullReplay(next);
+        void setMeta(FULL_REPLAY_KEY, next ? '1' : '0').catch(() => {});
+      },
+      toggleShowLine: () => {
+        const next = !showLine;
+        setShowLine(next);
+        void setMeta(SHOW_LINE_KEY, next ? '1' : '0').catch(() => {});
+      },
     },
   };
 }

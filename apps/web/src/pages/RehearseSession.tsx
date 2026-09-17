@@ -11,7 +11,6 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../store/app.ts';
 import { Board } from '../components/Board.tsx';
-import { BoardCue } from '../components/BoardCue.tsx';
 import { EnginePanel } from '../components/EnginePanel.tsx';
 import { ExpandPanel } from '../components/ExpandPanel.tsx';
 import { MissPanel } from '../components/MissPanel.tsx';
@@ -94,7 +93,6 @@ function Session({
     return () => window.removeEventListener('keydown', onKey);
   }, [phase, actions, s.missed.length, onExit]);
 
-  const boardCue = s.transition.cue ?? s.cue;
   const cardIndex =
     phase.kind === 'prompt' || phase.kind === 'correct' || phase.kind === 'miss' || phase.kind === 'transition'
       ? phase.index
@@ -112,25 +110,50 @@ function Session({
         expanding={expanding}
         evalAfterAnswer={s.evalAfterAnswer}
         sound={s.sound}
+        fullReplay={s.fullReplay}
         onToggleExpand={expanding ? actions.leaveExpand : actions.enterExpand}
         onToggleEval={actions.toggleEvalAfterAnswer}
         onToggleSound={actions.toggleSound}
+        onToggleFullReplay={actions.toggleFullReplay}
         onExit={onExit}
       />
 
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className="w-full lg:w-[min(640px,60vw)] flex flex-col gap-2">
-          <BoardCue cue={boardCue}>
-            <Board
-              rules={s.rules}
-              orientation={s.heroColor}
-              movableColor={s.boardMovable}
-              shapes={s.shapes}
-              animationMs={s.transition.animationMs}
-              onMovePlayed={actions.onMovePlayed}
-            />
-          </BoardCue>
-          <MoveLine sans={s.rules.history.map((m) => m.san)} />
+          <Board
+            rules={s.rules}
+            orientation={s.heroColor}
+            movableColor={s.boardMovable}
+            shapes={s.shapes}
+            animationMs={s.transition.animationMs}
+            onMovePlayed={actions.onMovePlayed}
+          />
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <button
+              onClick={actions.replayLine}
+              disabled={
+                s.replaying ||
+                !(phase.kind === 'prompt' || (phase.kind === 'expand' && phase.step === 'pick'))
+              }
+              className="rounded border border-slate-800 px-2 py-1 text-slate-400 hover:text-slate-200 disabled:opacity-40"
+              title="Replay how this position is reached, from the start"
+            >
+              {s.replaying ? 'Replaying…' : '▶ Replay line'}
+            </button>
+            <button
+              onClick={actions.toggleShowLine}
+              aria-pressed={s.showLine}
+              className={`rounded border px-2 py-1 ${
+                s.showLine
+                  ? 'border-slate-600 text-slate-200'
+                  : 'border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+              title="Show the moves of the current line"
+            >
+              {s.showLine ? 'Hide moves' : 'Show moves'}
+            </button>
+            {s.showLine && <MoveLine sans={s.rules.history.map((m) => m.san)} className="ml-1" />}
+          </div>
         </div>
 
         <aside className="w-full lg:flex-1 flex flex-col gap-3 text-sm">
