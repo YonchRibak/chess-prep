@@ -43,6 +43,14 @@ Terms used consistently across code, spec, and these docs.
 | **Mistakes mode** | `DrillMode` value selecting recently-missed cards, recency-weighted, ignoring the due date. Composes with a line scope. | ✅ built |
 | **Shadow line** | A stored refutation of a mistake: the engine's punishment, up to `MAX_REFUTATION_PLIES` deep, marked `moves.is_refutation`. Never prep, never carded, never walked, never exported. [srs-drilling](../03-domain/srs-drilling.md#refutation-shadow-lines-phase-9d) | ✅ built |
 
+## Study (S-phase) terms
+
+| Term | Meaning |
+|---|---|
+| **Study** | A lichess study export imported as *one* repertoire with `repertoires.source` provenance. Preparation happens in lichess; this app rehearses it. [study](../03-domain/study.md) |
+| **Chapter** | One game of the study export. Becomes a line tag on every edge it contains, so a chapter is rehearsable through the ordinary tag scope. |
+| **Demoted alternate** | A hero-side move the study offers at a position where an earlier chapter's main line already claims the prep slot. Imported with `is_dropped = true`, never carded, reported in the import summary. |
+
 ## Flow (F-phase) terms
 
 | Term | Meaning |

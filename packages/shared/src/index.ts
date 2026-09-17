@@ -10,4 +10,5 @@ export * from './prep.js';
 export * from './rashid.js';
 export * from './refutation.js';
 export * from './scope.js';
+export * from './study.js';
 export * from './types.js';

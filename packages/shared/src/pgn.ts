@@ -7,6 +7,10 @@
  *
  * Write: tree → PGN string with parenthesized variations, NAGs, and comments.
  *        Main-line moves emit first, then sibling variations in parentheses.
+ *
+ * `parsedMovesToTree` is the shared walk; `pgnToTree` (single game, legacy
+ * import) and the study importer in study.ts both build on it so the two
+ * paths cannot disagree about legality, SAN canonicalization, or edge dedupe.
  */
 import { Chess } from 'chess.js';
 import * as pgnParser from '@mliebelt/pgn-parser';
@@ -26,6 +30,10 @@ export interface TreeMoveInput {
   annotation: string | null;
   isMainLine: boolean;
   priority: number;
+  /** Study import: chapter tags. Absent on the legacy single-game path. */
+  lineTags?: string[];
+  /** Study import: a user-side alternate demoted by the prep policy. */
+  isDropped?: boolean;
 }
 
 export interface RepertoireTree {
@@ -44,7 +52,7 @@ export class InvalidPgnError extends Error {
 
 /* ---------------- parse ---------------- */
 
-type ParsedMove = {
+export type ParsedMove = {
   notation?: { notation?: string } | string;
   variations?: ParsedMove[][];
   commentAfter?: string;
@@ -52,12 +60,20 @@ type ParsedMove = {
   nag?: string[] | null;
 };
 
+export interface ParsedMovesOptions {
+  /**
+   * Trim comment whitespace. The parser keeps the spaces lichess pads
+   * comments with (`{ text }` → " text "); the legacy import stores them
+   * verbatim for round-trip fidelity, the study path trims for display.
+   */
+  trimComments?: boolean;
+}
+
 export function pgnToTree(
   pgn: string,
   options?: { startFen?: string },
 ): RepertoireTree {
   const startFen = options?.startFen ?? STARTING_FEN;
-  const rootKey = fenKey(startFen);
 
   let parsed: { moves: ParsedMove[] };
   try {
@@ -68,14 +84,30 @@ export function pgnToTree(
     throw new InvalidPgnError(`PGN parse failed: ${(e as Error).message}`);
   }
 
+  return parsedMovesToTree(parsed.moves ?? [], startFen);
+}
+
+/**
+ * Walk an already-parsed move list into a tree. Moves are emitted in
+ * encounter order: a main-line move, then each of its variations (depth
+ * first), then the next main-line move. Edges dedupe on `parentKey::san`;
+ * the first occurrence's comment/annotation wins and a later main-line
+ * occurrence promotes `isMainLine`.
+ */
+export function parsedMovesToTree(
+  pgnMoves: ParsedMove[],
+  startFen: string,
+  options: ParsedMovesOptions = {},
+): RepertoireTree {
+  const rootKey = fenKey(startFen);
   const positionsByKey = new Map<FenKey, string>();
   positionsByKey.set(rootKey, startFen);
 
   const moveByEdge = new Map<string, TreeMoveInput>(); // dedupe key: parentKey::san
 
-  function walk(parentFen: string, pgnMoves: ParsedMove[], isMainLine: boolean) {
+  function walk(parentFen: string, moves: ParsedMove[], isMainLine: boolean) {
     let currentFen = parentFen;
-    for (const pm of pgnMoves) {
+    for (const pm of moves) {
       const san = extractSan(pm);
       if (!san) {
         throw new InvalidPgnError(`PGN move missing SAN: ${JSON.stringify(pm)}`);
@@ -100,12 +132,15 @@ export function pgnToTree(
 
       const edgeKey = `${parentKey}::${moveObj.san}`;
       if (!moveByEdge.has(edgeKey)) {
+        const rawComment = pm.commentAfter ?? pm.commentMove ?? null;
+        const comment =
+          rawComment !== null && options.trimComments ? rawComment.trim() || null : rawComment;
         moveByEdge.set(edgeKey, {
           parentFenKey: parentKey,
           childFenKey: childKey,
           san: moveObj.san,
           uci: toUci(moveObj),
-          comment: pm.commentAfter ?? pm.commentMove ?? null,
+          comment,
           annotation: pm.nag?.[0] ?? null,
           isMainLine,
           priority: 0,
@@ -126,7 +161,7 @@ export function pgnToTree(
     }
   }
 
-  walk(startFen, parsed.moves ?? [], true);
+  walk(startFen, pgnMoves, true);
 
   return {
     rootFenKey: rootKey,
@@ -150,7 +185,6 @@ function extractSan(pm: ParsedMove): string | null {
 function toUci(move: { from: string; to: string; promotion?: string }): string {
   return move.from + move.to + (move.promotion ?? '');
 }
-
 /* ---------------- write ---------------- */
 
 export interface WritePgnOptions {

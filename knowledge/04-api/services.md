@@ -30,7 +30,7 @@ The largest and most careful file. Key shapes:
 | `patchMove` | comment / annotation / isMainLine / priority / **isDropped** |
 | `deleteMove` | Cascades to the move's SRS card |
 | `deleteAllRepertoires` | Bulk wipe — one statement, see below |
-| `importPgn` / `exportPgn` | Via `pgnToTree` / `treeToPgn` from shared |
+| `importPgn` / `exportPgn` | Via `pgnToTree` / `treeToPgn` from shared. Study imports (multi-chapter, prep policy) will use `studyPgnToTree` — see [study](../03-domain/study.md); the service side is not built yet |
 | `patchDrillRules` | Merges partial `DrillRules` |
 | `enforceOnePrepPerUserPosition` | The invariant guard — see below |
 | `isUuid` / `ensureIdFound` | Id-shape validation at the boundary — see below |
