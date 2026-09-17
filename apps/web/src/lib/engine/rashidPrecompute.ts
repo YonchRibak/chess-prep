@@ -52,12 +52,18 @@ export interface RashidPrecomputeProgress {
  * are not prep — precomputing either would spend minutes of engine time on
  * positions the user never plays toward.
  */
-export function heroPositionsInPriorityOrder(rep: RepertoireFull): RepertoirePosition[] {
+export function heroPositionsInPriorityOrder(
+  rep: RepertoireFull,
+  opts: { includeDropped?: boolean } = {},
+): RepertoirePosition[] {
   const heroTurn = rep.color === 'white' ? 'w' : 'b';
   const positionById = new Map(rep.positions.map((p) => [p.id, p]));
   const childIdsByParent = new Map<string, string[]>();
   for (const m of rep.moves) {
-    if (m.isDropped || m.isRefutation) continue;
+    if (m.isRefutation) continue;
+    // S4: a study's demoted alternates are dropped edges the user *wrote
+    // down*; the study scan opts in to them. Shadow lines stay excluded.
+    if (m.isDropped && !opts.includeDropped) continue;
     const list = childIdsByParent.get(m.parentPositionId) ?? [];
     list.push(m.childPositionId);
     childIdsByParent.set(m.parentPositionId, list);
@@ -87,6 +93,11 @@ export function heroPositionsInPriorityOrder(rep: RepertoireFull): RepertoirePos
 
 export interface RashidPrecomputeOptions {
   onProgress?: (p: RashidPrecomputeProgress) => void;
+  /** S4: every processed position with its result — the study scan keeps the
+   * lit ones as findings, which `RashidPrecomputeProgress` only counts. */
+  onResult?: (pos: RepertoirePosition, result: RashidResult, fromCache: boolean) => void;
+  /** S4: also visit hero positions under dropped edges (study alternates). */
+  includeDropped?: boolean;
   shouldCancel?: () => boolean;
   /** Test seams — production uses the real compute core / gate / clock. */
   compute?: (
@@ -130,7 +141,7 @@ export async function runRashidPrecompute(
         isCancelled: shouldCancel,
       }));
 
-  const positions = heroPositionsInPriorityOrder(rep);
+  const positions = heroPositionsInPriorityOrder(rep, { includeDropped: opts.includeDropped });
   const progress: RashidPrecomputeProgress = {
     total: positions.length,
     done: 0,
@@ -166,6 +177,7 @@ export async function runRashidPrecompute(
       if (fromCache) progress.cached += 1;
       else progress.computed += 1;
       if (result.lightsUp) progress.lit += 1;
+      opts.onResult?.(pos, result, fromCache);
     } catch (e) {
       if (e instanceof RashidCancelled) break;
       // Terminal position (mate inside the prep) or an engine hiccup — count

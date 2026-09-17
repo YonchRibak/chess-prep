@@ -13,6 +13,7 @@ import { Btn, Card, OverflowMenu } from '../components/ui.tsx';
 import { ImportStudyModal } from '../components/RepertoireModals.tsx';
 import type { RepertoireSummary } from '../api/client.ts';
 import { useRepStats } from '../lib/useRepStats.ts';
+import { useRashidScan } from '../store/rashidScan.ts';
 
 export function StudiesHome() {
   const repertoires = useAppStore((s) => s.repertoires);
@@ -215,7 +216,9 @@ export function StudiesHome() {
                   </Btn>
                   <Btn
                     onClick={() =>
-                      void withLoaded(r.id, () => go({ kind: 'editor', repertoireId: r.id }))
+                      void withLoaded(r.id, () =>
+                        go({ kind: 'study-browser', repertoireId: r.id }),
+                      )
                     }
                   >
                     Browse
@@ -224,6 +227,15 @@ export function StudiesHome() {
                   <div className="ml-auto">
                     <OverflowMenu
                       items={[
+                        {
+                          label: 'Scan with Rashid',
+                          onClick: () =>
+                            void withLoaded(r.id, () => {
+                              const full = useAppStore.getState().active;
+                              if (full) void useRashidScan.getState().start(full);
+                              go({ kind: 'study-browser', repertoireId: r.id });
+                            }),
+                        },
                         {
                           label: 'Lines',
                           onClick: () =>

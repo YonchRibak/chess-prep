@@ -75,7 +75,7 @@ Preparation moves to lichess studies; the app rehearses them. Detail in
 | **S1** ✅ | Shared parsing (`study.ts`): chapters → line tags, main-line-only hero prep policy with demoted alternates, live reachability |
 | **S2** ✅ | API: `repertoires.source` (migration `0011`), `POST /repertoires/import-study` + `POST /repertoires/:id/import-study` — a diff-based re-sync that keeps SRS history |
 | **S3** ✅ | Web: Studies home as the default landing (`#/`; repertoire list → `#/repertoires`), upload/update modal with the sync summary, note-on-miss pause in all three drill implementations |
-| **S4** | Not started — study browser view (tree + toggleable engine + Rashid on a position) and the background Rashid scan across a study with a findings list |
+| **S4** ✅ | Study browser (`#/study/:id`: shared `TreeView`, note on the current move, eval + Rashid probe off by default, keyboard stepping) and the Rashid study scan (`store/rashidScan.ts`: outlives the view, alternates included, findings list, cache reload) |
 
 Debt introduced: whole-study export is still single-game (`exportPgn` unchanged), and
 demoted alternates share `is_dropped` with the user's own drops (see study.md for the

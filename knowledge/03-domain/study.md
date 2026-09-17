@@ -13,7 +13,7 @@ Status by phase:
 | **S1** | Shared parsing + prep policy ([study.ts](../../packages/shared/src/study.ts)) | ✅ built |
 | **S2** | API: `repertoires.source` provenance + upsert sync endpoints ([studies.ts](../../apps/api/src/services/studies.ts)) | ✅ built |
 | **S3** | Web: Studies home as the default landing, upload/update modal, note-on-miss pause in all three drill implementations | ✅ built |
-| **S4** | Web: study browser view (tree + toggleable engine + Rashid) and the background Rashid scan with findings | not built |
+| **S4** | Web: study browser view (tree + toggleable engine + Rashid) and the background Rashid scan with findings | ✅ built |
 
 ## Parsing — [study.ts](../../packages/shared/src/study.ts)
 
@@ -94,10 +94,29 @@ door open.
   it is the one place the user learns which alternates were demoted and why.
 - **Note on a miss**: a `note` stage in the wrong-answer flow of all three drill
   implementations ([srs-drilling](srs-drilling.md#flow-mode)).
-- "Browse" on a study card opens the repertoire editor until S4 ships the dedicated
-  study browser.
+- "Browse" on a study card opens the study browser (S4).
 
-## Not built yet
+## Browser + Rashid scan (S4)
 
-S4: no study browser view, no background Rashid scan with findings. Export of a whole
-study is still a single game.
+- **Browser** — `#/study/:id` ([views](../05-web/views-and-routing.md)): the study's
+  variation tree and breadcrumb (shared with the editor via
+  [TreeView](../05-web/components-and-hooks.md)), the note on the current move with its
+  chapter chips, keyboard stepping, and a board that navigates when a played move is
+  in the study and snaps back otherwise. The engine eval panel and the Rashid probe
+  are both **off until toggled** — it is an ungated surface
+  ([engine](engine.md#who-gates-what)) that stays quiet by default.
+- **Scan** — "Scan whole study" (browser) or "Scan with Rashid" (home card) runs the
+  R5 precompute over every hero position, **alternates included by default**, in
+  [store/rashidScan.ts](../../apps/web/src/store/rashidScan.ts); it survives
+  navigation, pauses while drilling, and reports positions where Rashid lights up as
+  a clickable findings list with each position's path and chapter. "Load from cache"
+  rebuilds the list from cache layer B after a reload. Details and rules in
+  [rashid](rashid.md).
+
+## Not built
+
+- Export of a whole study is still a single game (`exportPgn` unchanged) — debt
+  against the "no lock-in" quality.
+- Detached `[FEN]` chapters are rejected rather than imported as separate studies.
+- The browser does not write its position back to the hash while stepping (deep-link
+  in only); a tab refresh returns to the root.

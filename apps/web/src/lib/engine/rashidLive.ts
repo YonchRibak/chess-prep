@@ -72,6 +72,17 @@ function tierKey(fk: string, heroColor: 'w' | 'b', engineId: string, tier: Rashi
   return rashidResultKey(fk, heroColor, engineId, tier.nodes, rashidConfigKey(tier.cfg));
 }
 
+/** S4: the exact layer-B key `computeAndStoreRashid` writes for a tier, so a
+ * reader (the study scan's cache reload) can never drift from the writer. */
+export function resultKeyForTier(
+  fk: string,
+  heroColor: 'w' | 'b',
+  engineId: string,
+  tier: RashidTier,
+): string {
+  return tierKey(fk, heroColor, engineId, tier);
+}
+
 /** Thrown when a probe is superseded (user navigated on) or a precompute run
  * is cancelled. Callers should swallow it — control flow, not a failure. */
 export class RashidCancelled extends Error {
@@ -165,6 +176,14 @@ let liveEngine: Engine | null = null;
 function getRashidEngine(): Engine {
   if (!liveEngine) liveEngine = new Engine();
   return liveEngine;
+}
+
+/** The engine build id cache keys are scoped to. Boots the live worker if
+ * needed; rejects when wasm cannot start (offline boot failure). */
+export async function rashidEngineId(): Promise<string> {
+  const e = getRashidEngine();
+  await e.init();
+  return e.getEngineId();
 }
 
 export interface RashidLiveHandle {

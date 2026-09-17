@@ -51,7 +51,9 @@ export type View =
   // Flow F2: the "Prepare against…" wizard.
   | { kind: 'prepare' }
   // Rashid dev harness — R0 throughput measurement + live calibration runs.
-  | { kind: 'rashid-lab' };
+  | { kind: 'rashid-lab' }
+  // Study S4: browse an imported study; `fenKey` deep-links a position.
+  | { kind: 'study-browser'; repertoireId: string; fenKey?: string };
 
 interface AppStore {
   view: View;

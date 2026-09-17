@@ -135,9 +135,35 @@ resumes when the drill ends — the third worker is outside the gate's reach, so
 loop enforces the no-leak rule itself. Progress UI (run/resume/stop, counts, pause
 indicator) lives in the `RashidPanel`'s precompute section.
 
+**Study scan (S4)** — the same runner, lifted into its own store with a *findings*
+list: [store/rashidScan.ts](../../apps/web/src/store/rashidScan.ts) +
+[rashidScan.test.ts](../../apps/web/src/store/rashidScan.test.ts).
+
+- **Outlives the view.** The editor's precompute died on unmount; a scan started
+  from the Studies home or the browser keeps running while the user goes to Today
+  (it still pauses while drilling). A small indicator in the app header shows
+  progress from anywhere and opens the study. Only `cancel()` or a `start()` on
+  another study stops it; a run token makes a superseded run's callbacks inert.
+- **Findings, not counts.** `runRashidPrecompute` gained `onResult(pos, result,
+  fromCache)`; the store keeps the lit ones as `RashidFinding { pathSans, lineTags
+  (chapter), viaMoveId, best }` so the browser can list and jump to them. A rerun on
+  the same study keeps its findings (layer-B hits are the "invalidation"); another
+  study resets them.
+- **Alternates included, for studies.** `heroPositionsInPriorityOrder(rep, {
+  includeDropped })` — off elsewhere (a dropped branch is one the user rejected),
+  **on by default for study repertoires**: a demoted alternate is a line the user
+  wrote down and may want to know is a trap. Shadow lines stay excluded.
+- **Reproducible from cache.** `loadFromCache` rebuilds the list from layer B
+  without engine time, precompute tier before live tier, using
+  `resultKeyForTier` — the exact key the writer uses, exported so reader and writer
+  cannot drift. It needs the engine build id (`rashidEngineId()`), so a wasm boot
+  failure offline leaves the list empty while the cache stays intact.
+
 ## What is NOT built
 
 - **R6** — tuning pass + triviality filter.
+- The study browser's probe toggle, like the editor's, defaults to **off**; the scan
+  runs on the precompute engine, the probe on the live one.
 - The editor probe toggle still defaults to **off** even after a precompute run
   (flipping it needs a persisted per-user/per-repertoire setting — a cheap follow-up,
   not built).

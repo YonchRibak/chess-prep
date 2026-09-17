@@ -46,6 +46,13 @@ describe('viewToHash / hashToView round-trip', () => {
     { kind: 'lines', repertoireId: 'abc', intent: 'grow' },
     { kind: 'prepare' },
     { kind: 'rashid-lab' },
+    // Study S4: a fenKey has spaces AND slashes; both must survive the hash.
+    { kind: 'study-browser', repertoireId: 'abc' },
+    {
+      kind: 'study-browser',
+      repertoireId: 'abc',
+      fenKey: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -',
+    },
     // Flow F2: guided flag, alone and together with a scope.
     { kind: 'walker-session', repertoireId: 'abc', seed: 'build', guided: true },
     {

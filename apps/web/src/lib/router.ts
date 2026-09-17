@@ -16,6 +16,7 @@
  *   #/lines/:id/:intent     → line navigator (train | grow)
  *   #/prepare               → "Prepare against…" wizard (Flow F2)
  *   #/rashid-lab            → Rashid dev harness (no nav entry; type the hash)
+ *   #/study/:id?at=<fenKey> → study browser (Study S4), optionally at a position
  *
  * Flow F2: walker hashes also accept `guided=1`, marking a guided-prepare
  * session (line-first traversal + lock-in; see WalkerSession).
@@ -95,6 +96,8 @@ export function viewToHash(v: View): string {
       return '#/prepare';
     case 'rashid-lab':
       return '#/rashid-lab';
+    case 'study-browser':
+      return `#/study/${v.repertoireId}${v.fenKey ? `?at=${encodeURIComponent(v.fenKey)}` : ''}`;
   }
 }
 
@@ -147,6 +150,11 @@ export function hashToView(hash: string): View | null {
       return { kind: 'prepare' };
     case 'rashid-lab':
       return { kind: 'rashid-lab' };
+    case 'study': {
+      if (!id) return null;
+      const at = new URLSearchParams(query).get('at');
+      return { kind: 'study-browser', repertoireId: id, ...(at ? { fenKey: at } : {}) };
+    }
     default:
       return null;
   }

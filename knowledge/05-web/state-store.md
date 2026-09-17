@@ -60,3 +60,8 @@ See [local-first](../02-architecture/local-first-sync.md).
 - **Engine state.** Owned by the `Engine` singleton and surfaced through `useEngine`.
 - **Session state** (current card, queue position, grading, skip set). Local to each
   session component so a session cannot outlive its own view.
+- **The Rashid study scan** — deliberately the opposite: it lives in a *second*
+  Zustand store, [store/rashidScan.ts](../../apps/web/src/store/rashidScan.ts),
+  because it is engine work that must outlive the view that started it (see
+  [rashid](../03-domain/rashid.md)). It is not folded into `app.ts` so `app.ts` stays
+  a UI/data store with no engine lifecycle in it.

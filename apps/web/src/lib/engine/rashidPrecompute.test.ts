@@ -105,6 +105,15 @@ describe('heroPositionsInPriorityOrder', () => {
     expect(heroPositionsInPriorityOrder(rep).map((p) => p.id)).toEqual([root.id, w2.id, w3.id]);
   });
 
+  it('includeDropped visits hero positions under a dropped edge, never a shadow line', () => {
+    const { rep, root, w2, w3 } = fixture();
+    const ids = heroPositionsInPriorityOrder(rep, { includeDropped: true }).map((p) => p.id);
+    // wd (after 1.d4 d5) is white-to-move under the dropped 1.d4; wr is a shadow.
+    const wd = rep.positions.find((p) => p.id === 'p6')!;
+    expect(ids).toEqual([root.id, w2.id, wd.id, w3.id]);
+    expect(ids).not.toContain('p7');
+  });
+
   it('analyzes a transposition once', () => {
     nextId = 0;
     // 1.Nf3 Nf6 2.Nc3 Nc6 and 1.Nc3 Nc6 2.Nf3 Nf6 converge on one
@@ -163,6 +172,24 @@ describe('runRashidPrecompute', () => {
       current: null,
       paused: false,
     });
+  });
+
+  it('reports every processed position through onResult', async () => {
+    const { rep, w2 } = fixture();
+    const seen: Array<[string, boolean, boolean]> = [];
+    await runRashidPrecompute(rep, {
+      sleep: async () => {},
+      compute: async (fen) =>
+        fenKey(fen) === w2.fenKey
+          ? { result: LIT, fromCache: true }
+          : { result: DARK, fromCache: false },
+      onResult: (pos, result, fromCache) => seen.push([pos.id, result.lightsUp, fromCache]),
+    });
+    expect(seen).toEqual([
+      ['p0', false, false],
+      [w2.id, true, true],
+      ['p4', false, false],
+    ]);
   });
 
   it('a failing position is counted and does not sink the run', async () => {

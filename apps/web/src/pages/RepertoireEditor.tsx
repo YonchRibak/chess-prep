@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Square } from 'chess.js';
 import { fenTurn, isUserMove } from '@chess-prep/shared';
 import { useAppStore } from '../store/app.ts';
-import { useChessRules } from '../lib/chess/useChessRules.ts';
+import { useChessRulesPinnedTo } from '../lib/chess/useChessRulesPinnedTo.ts';
+import { PathBreadcrumb, TreeView } from '../components/TreeView.tsx';
+import {
+  buildTreeIndices,
+  computePathToFenKey,
+  sortSiblings,
+  type TreeIndices,
+} from '../lib/tree/treeIndex.ts';
 import { Board } from '../components/Board.tsx';
 import { Btn, Card } from '../components/ui.tsx';
 import { EnginePanel } from '../components/EnginePanel.tsx';
@@ -77,7 +83,7 @@ function Editor({ active }: { active: RepertoireFull }) {
   }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lookup indices: positions by key/id, moves by parent.
-  const indices = useMemo(() => buildIndices(active), [active]);
+  const indices = useMemo(() => buildTreeIndices(active), [active]);
 
   const currentPosition = indices.positionByKey.get(currentFenKey);
   const currentFullFen = currentPosition?.fullFen ?? active.rootFullFen;
@@ -481,109 +487,6 @@ function Editor({ active }: { active: RepertoireFull }) {
 
 /* ---------------- helpers ---------------- */
 
-interface Indices {
-  positionByKey: Map<string, RepertoireFull['positions'][number]>;
-  positionById: Map<string, RepertoireFull['positions'][number]>;
-  movesByParent: Map<string, RepertoireMove[]>;
-  parentMovesByChildId: Map<string, RepertoireMove[]>;
-}
-
-function buildIndices(rep: RepertoireFull | null): Indices {
-  const positionByKey = new Map<string, RepertoireFull['positions'][number]>();
-  const positionById = new Map<string, RepertoireFull['positions'][number]>();
-  const movesByParent = new Map<string, RepertoireMove[]>();
-  const parentMovesByChildId = new Map<string, RepertoireMove[]>();
-  if (rep) {
-    for (const p of rep.positions) {
-      positionByKey.set(p.fenKey, p);
-      positionById.set(p.id, p);
-    }
-    for (const m of rep.moves) {
-      const arr = movesByParent.get(m.parentPositionId) ?? [];
-      arr.push(m);
-      movesByParent.set(m.parentPositionId, arr);
-      const carr = parentMovesByChildId.get(m.childPositionId) ?? [];
-      carr.push(m);
-      parentMovesByChildId.set(m.childPositionId, carr);
-    }
-  }
-  return { positionByKey, positionById, movesByParent, parentMovesByChildId };
-}
-
-function sortSiblings(moves: RepertoireMove[]): RepertoireMove[] {
-  return [...moves].sort((a, b) => {
-    if (a.isMainLine !== b.isMainLine) return a.isMainLine ? -1 : 1;
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    return a.san.localeCompare(b.san);
-  });
-}
-
-/** Best-effort path from the root to the current fenKey, choosing main-line ancestors. */
-function computePathToFenKey(
-  rep: RepertoireFull,
-  indices: Indices,
-  fenKey: string,
-): RepertoireMove[] {
-  const path: RepertoireMove[] = [];
-  let cursorKey = fenKey;
-  const visited = new Set<string>();
-  while (cursorKey !== rep.rootFenKey) {
-    if (visited.has(cursorKey)) break;
-    visited.add(cursorKey);
-    const position = indices.positionByKey.get(cursorKey);
-    if (!position) break;
-    const incoming = indices.parentMovesByChildId.get(position.id);
-    if (!incoming || incoming.length === 0) break;
-    // Prefer main-line incoming edge, else first.
-    const sorted = sortSiblings(incoming);
-    const chosen = sorted[0]!;
-    path.unshift(chosen);
-    const parentPos = indices.positionById.get(chosen.parentPositionId);
-    if (!parentPos) break;
-    cursorKey = parentPos.fenKey;
-  }
-  return path;
-}
-
-function PathBreadcrumb({
-  path,
-  rootFenKey,
-  currentFenKey,
-  onJump,
-}: {
-  path: RepertoireMove[];
-  rootFenKey: string;
-  currentFenKey: string;
-  onJump: (fenKey: string, moveId: string | null) => void;
-}) {
-  if (path.length === 0) {
-    return <p className="text-xs text-slate-500">Starting position.</p>;
-  }
-  return (
-    <ol className="flex flex-wrap gap-x-2 gap-y-1 text-xs font-mono">
-      <li>
-        <button
-          onClick={() => onJump(rootFenKey, null)}
-          className={`hover:text-emerald-300 ${currentFenKey === rootFenKey ? 'text-emerald-300' : ''}`}
-        >
-          start
-        </button>
-      </li>
-      {path.map((m, i) => (
-        <li key={m.id}>
-          <button
-            onClick={() => onJump(m.childFenKey, m.id)}
-            className={`hover:text-emerald-300 ${currentFenKey === m.childFenKey ? 'text-emerald-300' : ''}`}
-          >
-            {i % 2 === 0 ? `${Math.floor(i / 2) + 1}.` : ''}
-            {m.san}
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function MoveDetails({
   move,
   onCommentChange,
@@ -670,7 +573,7 @@ function UncoveredBranches({
   onJump,
 }: {
   active: RepertoireFull;
-  indices: Indices;
+  indices: TreeIndices;
   currentFenKey: string;
   onJump: (fenKey: string, moveId: string | null) => void;
 }) {
@@ -728,7 +631,7 @@ function UncoveredBranches({
 }
 
 /** Approximate depth-from-root (in plies) by walking parents. */
-function depthOfFen(rep: RepertoireFull, indices: Indices, fenKey: string): number {
+function depthOfFen(rep: RepertoireFull, indices: TreeIndices, fenKey: string): number {
   let cursor = fenKey;
   let depth = 0;
   const visited = new Set<string>();
@@ -756,7 +659,7 @@ function depthOfFen(rep: RepertoireFull, indices: Indices, fenKey: string): numb
  * that have no seeded line or are already branched.
  */
 function findSeededLineTip(rep: RepertoireFull): { fenKey: string; moveId: string | null } {
-  const indices = buildIndices(rep);
+  const indices = buildTreeIndices(rep);
   let cursorKey = rep.rootFenKey;
   let cursorMoveId: string | null = null;
   const visited = new Set<string>();
@@ -776,178 +679,7 @@ function findSeededLineTip(rep: RepertoireFull): { fenKey: string; moveId: strin
   return { fenKey: cursorKey, moveId: cursorMoveId };
 }
 
-/* ---------------- tree view ---------------- */
 
-interface TreeRenderToken {
-  kind: 'move' | 'open-var' | 'close-var';
-  move?: RepertoireMove;
-  fullMoveNumber?: number;
-  isWhite?: boolean;
-  needsNumberLabel?: boolean;
-  depth: number;
-}
-
-function TreeView({
-  active,
-  indices,
-  currentMoveId,
-  onNavigate,
-}: {
-  active: RepertoireFull;
-  indices: Indices;
-  currentMoveId: string | null;
-  onNavigate: (fenKey: string, moveId: string) => void;
-}) {
-  const tokens = useMemo(
-    () => flattenTree(active, indices),
-    [active, indices],
-  );
-  if (tokens.length === 0) {
-    return <p className="text-xs text-slate-500">No moves yet.</p>;
-  }
-  return (
-    <div className="text-xs font-mono leading-relaxed flex flex-wrap gap-x-1 gap-y-0.5">
-      {tokens.map((t, i) => {
-        if (t.kind === 'open-var') {
-          return (
-            <span key={i} className="text-slate-500">
-              (
-            </span>
-          );
-        }
-        if (t.kind === 'close-var') {
-          return (
-            <span key={i} className="text-slate-500">
-              )
-            </span>
-          );
-        }
-        const m = t.move!;
-        const isCurrent = m.id === currentMoveId;
-        const label =
-          (t.needsNumberLabel
-            ? t.isWhite
-              ? `${t.fullMoveNumber}. `
-              : `${t.fullMoveNumber}... `
-            : '') + m.san;
-        return (
-          <button
-            key={i}
-            onClick={() => onNavigate(m.childFenKey, m.id)}
-            className={`px-1 rounded ${
-              isCurrent
-                ? 'bg-emerald-700 text-white'
-                : m.isMainLine
-                  ? 'hover:bg-slate-800'
-                  : 'text-slate-400 hover:bg-slate-800'
-            }`}
-          >
-            {label}
-            {m.annotation ? m.annotation : ''}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function flattenTree(rep: RepertoireFull, indices: Indices): TreeRenderToken[] {
-  const out: TreeRenderToken[] = [];
-  const visited = new Set<string>();
-
-  function walk(parentPositionId: string, parentFullFen: string, depth: number, isLineStart: boolean) {
-    const children = sortSiblings(indices.movesByParent.get(parentPositionId) ?? []);
-    if (children.length === 0) return;
-    const currentFullFen = parentFullFen;
-    const pairFlow = !isLineStart;
-
-    for (let idx = 0; idx < children.length; idx++) {
-      const m = children[idx]!;
-      const isMain = idx === 0;
-      const meta = parseFenMeta(currentFullFen);
-
-      if (isMain) {
-        out.push({
-          kind: 'move',
-          move: m,
-          fullMoveNumber: meta.fullMoveNumber,
-          isWhite: meta.turn === 'w',
-          needsNumberLabel: meta.turn === 'w' || !pairFlow,
-          depth,
-        });
-      } else {
-        // sibling variation
-        out.push({ kind: 'open-var', depth });
-        out.push({
-          kind: 'move',
-          move: m,
-          fullMoveNumber: meta.fullMoveNumber,
-          isWhite: meta.turn === 'w',
-          needsNumberLabel: true,
-          depth: depth + 1,
-        });
-        const childPosForVar = indices.positionById.get(m.childPositionId);
-        if (childPosForVar && !visited.has(childPosForVar.id)) {
-          visited.add(childPosForVar.id);
-          walk(childPosForVar.id, childPosForVar.fullFen, depth + 1, false);
-        }
-        out.push({ kind: 'close-var', depth });
-      }
-    }
-
-    // Continue down the main line after emitting siblings.
-    const main = children[0]!;
-    const mainChildPos = indices.positionById.get(main.childPositionId);
-    if (mainChildPos && !visited.has(mainChildPos.id)) {
-      visited.add(mainChildPos.id);
-      walk(mainChildPos.id, mainChildPos.fullFen, depth, children.length > 1 ? false : true /* pairFlow */);
-    }
-  }
-
-  const root = indices.positionByKey.get(rep.rootFenKey);
-  if (root) {
-    visited.add(root.id);
-    walk(root.id, root.fullFen, 0, true);
-  }
-  return out;
-}
-
-function parseFenMeta(fen: string): { fullMoveNumber: number; turn: 'w' | 'b' } {
-  const parts = fen.trim().split(/\s+/);
-  return {
-    turn: (parts[1] ?? 'w') as 'w' | 'b',
-    fullMoveNumber: Number(parts[5] ?? 1),
-  };
-}
-
-/* ---------------- pinned chess rules ---------------- */
-
-/**
- * Like useChessRules but pinned to a specific FEN so navigation jumps work.
- * The legal-moves logic is recomputed every render — fine for a board.
- */
-function useChessRulesPinnedTo(fullFen: string, lastMove: RepertoireMove | null) {
-  // Recreate rules whenever fullFen changes. We use the existing useChessRules
-  // hook by loading the FEN on each render via a small wrapper.
-  const rules = useChessRules(fullFen);
-  useEffect(() => {
-    rules.load(fullFen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullFen]);
-
-  // Override lastMove from the repertoire's edge for clearer highlighting.
-  const lastMoveOverride = lastMove
-    ? {
-        from: lastMove.uci.slice(0, 2) as Square,
-        to: lastMove.uci.slice(2, 4) as Square,
-      }
-    : null;
-
-  return {
-    ...rules,
-    lastMove: lastMoveOverride ?? rules.lastMove,
-  };
-}
 
 /* ---------------- file download ---------------- */
 

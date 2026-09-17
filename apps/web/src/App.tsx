@@ -12,6 +12,8 @@ import { DailyDiet } from './pages/DailyDiet.tsx';
 import { LineNavigator } from './pages/LineNavigator.tsx';
 import { PrepareWizard } from './pages/PrepareWizard.tsx';
 import { RashidLab } from './pages/RashidLab.tsx';
+import { StudyBrowser } from './pages/StudyBrowser.tsx';
+import { useRashidScan } from './store/rashidScan.ts';
 import { Btn, ErrorBanner } from './components/ui.tsx';
 import { attachOnlineFlush, flushQueue } from './lib/srs/sync.ts';
 import { useHashRouting } from './lib/router.ts';
@@ -29,6 +31,7 @@ const VIEW_LABEL: Record<string, string> = {
   lines: 'Lines',
   prepare: 'Prepare',
   'rashid-lab': 'Rashid lab',
+  'study-browser': 'Study',
 };
 
 export function App() {
@@ -48,6 +51,11 @@ export function App() {
   }, []);
 
   const go = useAppStore((s) => s.go);
+
+  // Study S4: the Rashid scan outlives its view; keep it visible from anywhere.
+  const scanRunning = useRashidScan((s) => s.running);
+  const scanProgress = useRashidScan((s) => s.progress);
+  const scanRepId = useRashidScan((s) => s.repertoireId);
 
   return (
     <div className="min-h-full p-4 md:p-8 flex flex-col items-center gap-6">
@@ -86,7 +94,24 @@ export function App() {
             </Btn>
           </nav>
         </div>
-        <span className="text-xs text-slate-500">{VIEW_LABEL[view.kind]}</span>
+        <div className="flex items-center gap-3">
+          {scanRunning && scanRepId && (
+            <button
+              className="text-[10px] px-2 py-0.5 rounded border border-amber-800 bg-amber-950/40 text-amber-200 hover:bg-amber-900/40"
+              title="Rashid scan running — open the study"
+              onClick={() => {
+                void (async () => {
+                  const store = useAppStore.getState();
+                  if (store.active?.id !== scanRepId) await store.loadRepertoire(scanRepId).catch(() => {});
+                  useAppStore.getState().go({ kind: 'study-browser', repertoireId: scanRepId });
+                })();
+              }}
+            >
+              Rashid scan {scanProgress?.paused ? 'paused' : `${scanProgress?.done ?? 0}/${scanProgress?.total ?? '?'}`}
+            </button>
+          )}
+          <span className="text-xs text-slate-500">{VIEW_LABEL[view.kind]}</span>
+        </div>
       </header>
 
       <main className="w-full flex flex-col items-center">
@@ -104,6 +129,7 @@ export function App() {
         {view.kind === 'lines' && <LineNavigator intent={view.intent} />}
         {view.kind === 'prepare' && <PrepareWizard />}
         {view.kind === 'rashid-lab' && <RashidLab />}
+        {view.kind === 'study-browser' && <StudyBrowser fenKey={view.fenKey} />}
       </main>
 
       {error && <ErrorBanner message={error} onClose={clearError} />}

@@ -81,7 +81,7 @@ second one without the same argument.
 | [DrillSession](../../apps/web/src/pages/DrillSession.tsx) | Gated for the whole mount |
 | [DailyDiet](../../apps/web/src/pages/DailyDiet.tsx) | Gated for the whole mount |
 | [WalkerSession](../../apps/web/src/pages/WalkerSession.tsx) | Gated **per phase** — build phases (`attention`, `drill-paused-for-build`) run the engine, since there's no card answer to leak while authoring prep; every drill phase re-gates. Flow F2's **lock-in phases** (`lockin-prompt`, `lockin-wrong`) are drill phases and gate too — the user is being tested on a move they just chose *with* engine help, and seeing the eval again before grading would leak the answer they're supposed to recall |
-| Repertoire editor, opening browser | Ungated |
+| Repertoire editor, opening browser, [study browser](../../apps/web/src/pages/StudyBrowser.tsx) | Ungated — no unanswered card is ever on screen. The study browser's eval panel and Rashid probe both default to **off** (S4: "watch the engine when I want, hide it when I don't") |
 
 After a card is graded, revealing eval is allowed only if the per-repertoire
 `evalAfterAnswer` drill rule is on; if off, it stays hidden for the whole session.
