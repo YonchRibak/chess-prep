@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: chess
       POSTGRES_DB: chess_prep
     ports:
-      - "5432:5432"
+      # Host port 5433, not 5432: other local projects run their own Postgres on
+      # 5432. A collision is silent and confusing — the API connects to the other
+      # database and fails with "password authentication failed for user chess".
+      - "5433:5432"
     volumes:
       - chess_prep_pgdata:/var/lib/postgresql/data
     healthcheck:

@@ -40,7 +40,7 @@ Root ([package.json](../../package.json)) fans out with `pnpm -r`:
 | `pnpm dev` | web + api in parallel |
 | `pnpm dev:web` / `pnpm dev:api` | one side only |
 | `pnpm build` / `pnpm test` / `pnpm lint` / `pnpm typecheck` | recursive |
-| `pnpm db:up` / `db:down` | docker-compose Postgres 16 (`chess:chess@localhost:5432/chess_prep`) |
+| `pnpm db:up` / `db:down` | docker-compose Postgres 16 (`chess:chess@localhost:5433/chess_prep`) |
 | `pnpm db:migrate` / `db:generate` / `db:studio` | Drizzle Kit |
 
 API-only: `pnpm --filter @chess-prep/api db:import-openings` loads the ECO TSVs.

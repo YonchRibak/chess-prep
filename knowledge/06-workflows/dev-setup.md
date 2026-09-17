@@ -7,7 +7,7 @@ for Postgres.
 
 ```bash
 pnpm install
-pnpm db:up                                          # Postgres 16 on :5432
+pnpm db:up                                          # Postgres 16 on :5433 (not 5432 — see below)
 cp apps/api/.env.example apps/api/.env              # then check DATABASE_URL
 pnpm db:migrate                                     # applies drizzle/ + seeds the default user
 pnpm --filter @chess-prep/api db:import-openings    # loads the ECO book (~3,733 rows)
@@ -16,8 +16,16 @@ pnpm dev                                            # web :5173 + api :8787
 ```
 
 Docker credentials from [docker-compose.yml](../../docker-compose.yml):
-`chess:chess@localhost:5432/chess_prep`, volume `chess_prep_pgdata`, with a `pg_isready`
+`chess:chess@localhost:5433/chess_prep`, volume `chess_prep_pgdata`, with a `pg_isready`
 healthcheck.
+
+**The host port is 5433, not 5432.** Other projects on the same machine run their own
+Postgres on the default 5432, and a collision fails *silently*: `docker compose up`
+reports success only if it wins the bind, the API happily connects to whatever is on the
+port, and the first query dies with `password authentication failed for user "chess"`
+(Postgres `28P01`). Every DB-touching route then 500s, which the web app surfaces as a
+generic failure with nothing pointing at the database. If you see `28P01`, check
+`docker ps` for a foreign container holding the port before suspecting credentials.
 
 ## Environment
 
