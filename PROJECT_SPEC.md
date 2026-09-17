@@ -1,5 +1,14 @@
 # Chess Prep Tool — Build Spec
 
+> **Reframed 2026-09-17.** The product is now *rehearsing openings prepared in lichess
+> studies*: upload a study export, drill it with spaced repetition, re-upload when it
+> changes, browse it with engine and Rashid. That flow is the landing page and the
+> primary use case; everything below (the ECO-grounded repertoire builder, the guided
+> prepare wizard, the tree editor) is the machinery it runs on and remains built and
+> reachable. Current state lives in `knowledge/` — start with
+> [knowledge/03-domain/study.md](knowledge/03-domain/study.md). This spec is kept as the
+> historical build brief and the record of intent for the parked phases.
+
 A web-first PWA for chess opening preparation: learn from a built-in opening database, build your own repertoire on top of named openings, and drill those moves flashcard-style with spaced repetition. Engine analysis is available everywhere except inside an open flashcard.
 
 This document is the build brief for a coding agent. Work through it phase by phase. Each phase ends in a runnable, testable state — do not start a phase before the previous one runs.
@@ -12,7 +21,7 @@ This document is the build brief for a coding agent. Work through it phase by ph
 
 The owner is a competitive chess player and fullstack developer. They previously used Lotus Chess for flashcard drilling and want the same core loop with deeper customizability, plus integration with a named-opening database so prep is grounded in real theory.
 
-Primary use case priority, in order:
+Primary use case priority, in order (see the 2026-09 reframe above — study rehearsal now sits at #1, and the original #1 is the supporting path):
 1. Building and drilling a personal opening repertoire on top of a named-opening database.
 2. A daily mixed-side drill that just works.
 3. Engine-assisted analysis for free study (but **never** during an unanswered flashcard).

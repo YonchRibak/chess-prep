@@ -1,13 +1,26 @@
 # What this app is
 
-A web-first PWA for chess opening preparation, built by and for a single competitive
-player who is also a fullstack dev. It replaces Lotus Chess with something more
-customizable and grounded in real opening theory.
+A web-first PWA for **rehearsing the opening preparation you keep in lichess studies**,
+built by and for a single competitive player who is also a fullstack dev.
 
-Three things it does:
-1. **Build a repertoire** on top of a bundled named-opening (ECO) database.
-2. **Drill that repertoire** flashcard-style with FSRS spaced repetition, offline.
-3. **Analyze** with Stockfish — everywhere *except* inside an unanswered flashcard.
+The split is deliberate: lichess studies are a better place to *prepare* (analysis
+board, engine, sharing, annotations) than anything this app would build; what lichess
+lacks is *rehearsal* — spaced repetition, a daily diet, drilling one chapter, being
+stopped by your own note when you go wrong. So:
+
+1. **Upload a study** — one chapter or the whole export — and it becomes one
+   repertoire with a chapter per scope ([study](../03-domain/study.md)).
+2. **Rehearse it** flashcard-style with FSRS, fully offline; a miss on a commented
+   move pauses to show the note.
+3. **Re-upload** whenever the study changes; the sync is a diff, so scheduling history
+   on unchanged moves is kept.
+4. **Browse and analyze** it: engine eval and Rashid trap-finding on demand, per
+   position or across the whole study — everywhere *except* inside an unanswered card.
+
+The older way of working — building a repertoire by hand on the bundled ECO opening
+database, the guided "Prepare against…" wizard, the tree editor — is still here and
+still reachable from the nav. It is the supporting machinery, not the product: a study
+import fills the same position-keyed tree those tools operate on.
 
 ## The core loop — one walker, two seeds
 
@@ -67,10 +80,11 @@ These are product-level constraints. Don't regress them.
 
 ## Priority order of use cases
 
-1. Building and drilling a personal repertoire on top of the opening database.
+1. Rehearsing lichess studies: upload, drill (whole study or one chapter), re-upload.
 2. A daily mixed-side drill that just works.
-3. Engine-assisted free analysis.
-4. Opponent scouting via move-frequency heatmap — **parked**, see [roadmap](../06-workflows/roadmap.md).
+3. Browsing a study with engine eval and Rashid, on demand.
+4. Building and drilling a hand-built repertoire on the opening database (legacy path).
+5. Opponent scouting via move-frequency heatmap — **parked**, see [roadmap](../06-workflows/roadmap.md).
 
 ## Auth
 

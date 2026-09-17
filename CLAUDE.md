@@ -4,25 +4,42 @@ Guidance for Claude Code when working in this repository.
 
 ## Vision
 
-A web-first PWA for chess opening preparation, built by and for a single competitive
-player who is also a fullstack dev — a more customizable replacement for Lotus Chess,
-grounded in real opening theory. It does three things:
+A web-first PWA for **rehearsing opening preparation that lives in lichess studies**,
+built by and for a single competitive player who is also a fullstack dev. The division
+of labour is the whole point: **lichess is where openings are prepared; this app is
+where they are rehearsed.** The main loop is:
 
-1. **Build a repertoire** on top of a bundled named-opening (ECO) database.
-2. **Drill it** flashcard-style with FSRS spaced repetition, fully offline.
-3. **Analyze** with Stockfish — everywhere *except* inside an unanswered flashcard.
+1. **Upload a lichess study** (one chapter or the whole export). It becomes one
+   repertoire; chapters become rehearsable scopes; the study's variations are the
+   lines; the user's comments are the notes.
+2. **Rehearse it** flashcard-style with FSRS spaced repetition, fully offline. Miss a
+   move that carries a note and the session stops to show it.
+3. **Re-upload when the study changes.** The study is the source of truth; the sync is
+   a diff so scheduling history survives.
+4. **Browse and analyze** the study — Stockfish on demand, Rashid trap-finding on a
+   position or across the whole study — everywhere *except* inside an unanswered card.
+
+The Studies home is the landing page. The older hand-built flow (build a repertoire on
+the bundled ECO database, guided "Prepare against…", tree editor) still exists and is
+reachable from the nav, but it is secondary: treat study rehearsal as the product and the
+rest as supporting machinery. See [study.md](knowledge/03-domain/study.md) and
+[product.md](knowledge/01-overview/product.md).
 
 The atomic unit is a **prepared move**: a parent position (normalized FEN) plus the
 single move the user intends to play there. Build and Drill are not separate UIs — they
-are two *seeds* into one **walker** over a position-keyed tree. See
-[product.md](knowledge/01-overview/product.md) and [walker.md](knowledge/03-domain/walker.md).
+are two *seeds* into one **walker** over a position-keyed tree
+([walker.md](knowledge/03-domain/walker.md)); a study import simply fills that tree.
 
 **Non-negotiable qualities** — don't regress these:
-- **Offline drilling.** The backend is a sync/backup target, never the source of truth
+- **The study is the source of truth.** A re-import must never lose SRS history on
+  moves the study still has, and must never touch a hand-built repertoire.
+- **Offline rehearsal.** The backend is a sync/backup target, never the source of truth
   for a live drill session.
 - **No lock-in.** Round-trip-faithful PGN import *and* export.
-- **Deep customizability.** Per-repertoire drill rules; a daily mixed-side session.
-- **The engine never leaks a card's answer.**
+- **Deep customizability.** Per-repertoire drill rules; per-chapter scopes; a daily
+  mixed-side session.
+- **The engine never leaks a card's answer.** The user's own study notes are not engine
+  output and may be shown on a miss.
 
 ## Technical stack
 
@@ -95,7 +112,11 @@ Authority order when sources disagree:
    *intent*, including parked and future work that isn't built.
 3. **`knowledge/`** — describes *current state*.
 
-Before touching anything, know these five (all detailed in the knowledge base):
+Before touching anything, know these six (all detailed in the knowledge base):
+- **Study repertoires** (`repertoires.source` set) are owned by their lichess study: on
+  re-import the PGN decides hero-side `is_dropped` (the main-line-only prep policy parks
+  the user's other alternates as *demoted*), opponent-side drops and refutation shadow
+  lines are the user's and survive. See [study.md](knowledge/03-domain/study.md).
 - The one-prep-per-user-turn-position invariant is **application-level, not a DB
   constraint**.
 - `fenKey()` in `packages/shared` is the **single** source of position identity.

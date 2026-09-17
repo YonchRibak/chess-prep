@@ -16,7 +16,7 @@ If a doc and the code disagree, the code wins — and the doc should be fixed.
 ## Map
 
 ### 01 — Overview
-- [What this app is](01-overview/product.md) — product goals, the core loop, users.
+- [What this app is](01-overview/product.md) — **rehearse lichess studies** is the product; hand-built repertoires are the supporting machinery. Core loop, priorities.
 - [Glossary](01-overview/glossary.md) — prep move, walker, seed, fenKey, card, book.
 
 ### 02 — Architecture
@@ -33,7 +33,7 @@ If a doc and the code disagree, the code wins — and the doc should be fixed.
 - [Engine & gating](03-domain/engine.md) — Stockfish worker, the hard no-leak guarantee.
 - [Rashid trap-finder](03-domain/rashid.md) — only-move tightropes scored Risk/Reward/Length; shared domain core built, everything else (adapter, cache, precompute, arrows) is not.
 - [Repertoire growth & line scopes](03-domain/repertoire-growth.md) — Phase 9, **all four sub-phases built** (line scopes, explorer cache, the growth loop, mistake rehearsal). Only weakness-steered growth remains design.
-- [Study flow](03-domain/study.md) — lichess study PGN → one repertoire: chapters as line tags, main-line-only prep policy with demoted alternates. **All four phases built** (parsing, API sync, Studies home + note pause, study browser + Rashid scan).
+- [Study flow](03-domain/study.md) — **the main flow.** Lichess study PGN → one repertoire: chapters as line tags, main-line-only prep policy with demoted alternates, diff-based re-import, note-on-miss, study browser, Rashid scan. Read this before anything user-facing.
 - [Opening explorer](03-domain/explorer.md) — frequency/result statistics, the cache, the candidate-selection policy, and how the build prompt consumes them.
 
 ### 04 — API (`apps/api`)
