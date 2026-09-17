@@ -138,7 +138,13 @@ hero move in scope, **shuffled** (the user's choice), via `buildDrillQueue({ mod
 'random' })` under the chapter's tag scope. Stored drill rules are deliberately ignored.
 A hero move whose card the local store has not pulled yet gets a **stub card**
 (`emptyCardFor`); grading a stub pushes by `moveId` onto the real card, so nothing is
-invented server-side. Each item carries `pathSans` from `findPathToPosition` with the
+invented server-side. **Stubs and items are restricted to live-reachable parents**
+([rehearse/reachable.ts](../../apps/web/src/lib/rehearse/reachable.ts)): the queue
+builder only skips a dropped move *itself*, so a hero move below a demoted alternate is
+not dropped, is never carded by the API, and has no path from the root — stubbing it
+put cards on the board that could only render as the starting position (the S5 launch
+bug). No idle timer anywhere: a card waits as long as the user likes; the hint is on
+demand only. Each item carries `pathSans` from `findPathToPosition` with the
 S5 `prefer` option, so a transposition is replayed through the chapter's own line.
 
 **Grading is silent**: correct = Good, wrong = Again, correct-after-hint = Hard.

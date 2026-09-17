@@ -16,5 +16,4 @@ export const NEW_LINE_FADE_MS = 220;
 export const CORRECT_PAUSE_MS = 350;
 /** How long the correct move stays on the board after a miss before retry. */
 export const WRONG_REVEAL_MS = 1200;
-/** Idle time on a card before the hint (origin square) appears by itself. */
-export const HINT_AFTER_MS = 10_000;
+// Deliberately no idle timer: a card never times out or hints by itself.

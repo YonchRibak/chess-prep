@@ -40,7 +40,7 @@ import {
 } from './expand.ts';
 import { buildRehearseQueue, type RehearseItem } from './queue.ts';
 import { loadSoundPref, saveSoundPref, sounds } from './sounds.ts';
-import { CORRECT_PAUSE_MS, HINT_AFTER_MS, WRONG_REVEAL_MS } from './timings.ts';
+import { CORRECT_PAUSE_MS, WRONG_REVEAL_MS } from './timings.ts';
 import type { ExplorerEntry, RankedReply } from '@chess-prep/shared';
 
 export type RehearsePhase =
@@ -346,13 +346,8 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
     }
   }
 
-  // Idle hint: after a while on a card, show where the piece is.
-  useEffect(() => {
-    if (phase.kind !== 'prompt' || phase.hint) return;
-    const t = setTimeout(hint, HINT_AFTER_MS);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  // No idle timer: a card waits for the user for as long as they like. The
+  // hint is on demand only (H / button).
 
   /* ---------------- expand ---------------- */
 

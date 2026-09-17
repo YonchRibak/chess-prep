@@ -5,6 +5,7 @@
  */
 import { fenTurn, isUserMove, type Color, type SrsCardDto } from '@chess-prep/shared';
 import type { RepertoireFull } from '../../api/client.ts';
+import { liveReachablePositionIds } from './reachable.ts';
 
 export interface ChapterStats {
   /** Live hero moves carrying the tag — the cards a chapter rehearsal shows. */
@@ -22,9 +23,10 @@ export function computeChapterStats(
 ): Map<string, ChapterStats> {
   const cardByMoveId = new Map(cards.map((c) => [c.moveId, c]));
   const positionById = new Map(rep.positions.map((p) => [p.id, p]));
+  const reachable = liveReachablePositionIds(rep);
   const out = new Map<string, ChapterStats>();
   for (const m of rep.moves) {
-    if (m.isDropped || m.isRefutation) continue;
+    if (m.isDropped || m.isRefutation || !reachable.has(m.parentPositionId)) continue;
     const parent = positionById.get(m.parentPositionId);
     if (!parent || !isUserMove(fenTurn(parent.fullFen), rep.color as Color)) continue;
     const card = cardByMoveId.get(m.id);

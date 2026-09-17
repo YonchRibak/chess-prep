@@ -27,6 +27,22 @@ describe('buildRehearseQueue', () => {
     expect(q.map((i) => i.move.san).sort()).toEqual(['Bb5', 'Nf3', 'Nf3', 'd4', 'e4']);
   });
 
+  it('never queues a hero move below a demoted alternate — no stub, no path, even with a stale card', () => {
+    // 2.Nc3 is a demoted alternate; the study still contains 2...Nc6 3.d4
+    // below it, and d4 is a hero move that is NOT itself dropped.
+    const r = makeTestRepertoire('white', [
+      { sans: ['e4', 'c5', 'Nf3', 'd6'], tags: ['Sic'], mainLine: true },
+      { sans: ['e4', 'c5', 'Nc3', 'Nc6', 'd4'], tags: ['Sic'] },
+    ]);
+    moveBySan(r, 'Nc3', ['e4', 'c5']).isDropped = true;
+    const d4 = moveBySan(r, 'd4', ['e4', 'c5', 'Nc3', 'Nc6']);
+    expect(withStubCards(r, [], NOW).some((c) => c.moveId === d4.id)).toBe(false);
+    const stale = emptyCardFor(d4.id, NOW);
+    const q = buildRehearseQueue({ repertoire: r, cards: [stale], rng: () => 0.5, now: NOW });
+    expect(q.map((i) => i.move.san).sort()).toEqual(['Nf3', 'e4']);
+    for (const it of q) expect(it.pathSans.length).toBe(it.depth);
+  });
+
   it('shuffles deterministically with the injected rng', () => {
     let seed = 1;
     const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;

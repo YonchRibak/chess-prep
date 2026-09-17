@@ -12,6 +12,7 @@ import type { RepertoireFull } from '../../api/client.ts';
 import { buildDrillQueue, type DrillItem } from '../drill/queue.ts';
 import { emptyCardFor } from '../srs/scheduler.ts';
 import { buildIndices, findPathToPosition } from '../walker/walker.ts';
+import { liveReachablePositionIds } from './reachable.ts';
 
 export interface RehearseItem extends DrillItem {
   /** SANs from the root to the card's parent position. */
@@ -33,6 +34,11 @@ export interface BuildRehearseQueueArgs {
  * heard of it yet: a move whose server card has not been pulled gets a stub
  * `emptyCardFor` card. Grading a stub pushes by `moveId`, so it lands on the
  * real card once it exists — nothing is invented server-side.
+ *
+ * Only for moves whose parent is **live-reachable**: a hero move under a
+ * demoted alternate is not dropped itself, but the API never cards it and no
+ * path from the root reaches it — stubbing it would queue a card the board
+ * cannot show.
  */
 export function withStubCards(
   repertoire: RepertoireFull,
@@ -41,9 +47,11 @@ export function withStubCards(
 ): SrsCardDto[] {
   const known = new Set(cards.map((c) => c.moveId));
   const positionById = new Map(repertoire.positions.map((p) => [p.id, p]));
+  const reachable = liveReachablePositionIds(repertoire);
   const stubs: SrsCardDto[] = [];
   for (const m of repertoire.moves) {
     if (m.isDropped || m.isRefutation || known.has(m.id)) continue;
+    if (!reachable.has(m.parentPositionId)) continue;
     const parent = positionById.get(m.parentPositionId);
     if (!parent) continue;
     if (!isUserMove(fenTurn(parent.fullFen), repertoire.color as Color)) continue;
@@ -65,10 +73,15 @@ export function buildRehearseQueue(args: BuildRehearseQueueArgs): RehearseItem[]
     ...(now ? { now } : {}),
   });
   const indices = buildIndices(repertoire);
+  const reachable = liveReachablePositionIds(repertoire);
   const prefer = chapterTag ? (m: { lineTags: string[] }) => m.lineTags.includes(chapterTag) : undefined;
-  return items.map((it) => ({
-    ...it,
-    pathSans: findPathToPosition(repertoire, indices, it.parentPosition.id, { prefer }).map((m) => m.san),
-    parentFullFen: it.parentPosition.fullFen,
-  }));
+  return items
+    // A server card can exist on a move whose parent became unreachable later
+    // (a study re-import demoted the branch above it). Same rule as the stubs.
+    .filter((it) => reachable.has(it.parentPosition.id))
+    .map((it) => ({
+      ...it,
+      pathSans: findPathToPosition(repertoire, indices, it.parentPosition.id, { prefer }).map((m) => m.san),
+      parentFullFen: it.parentPosition.fullFen,
+    }));
 }
