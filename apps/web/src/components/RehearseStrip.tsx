@@ -15,11 +15,9 @@ export function RehearseStrip({
   expanding,
   evalAfterAnswer,
   sound,
-  fullReplay,
   onToggleExpand,
   onToggleEval,
   onToggleSound,
-  onToggleFullReplay,
   onExit,
 }: {
   title: string;
@@ -30,12 +28,9 @@ export function RehearseStrip({
   expanding: boolean;
   evalAfterAnswer: boolean;
   sound: boolean;
-  /** Replay whole lines between cards instead of snapping and animating the last ply. */
-  fullReplay: boolean;
   onToggleExpand: () => void;
   onToggleEval: () => void;
   onToggleSound: () => void;
-  onToggleFullReplay: () => void;
   onExit: () => void;
 }) {
   const answered = stats.correct + stats.wrong;
@@ -64,13 +59,6 @@ export function RehearseStrip({
       <div className="ml-auto flex items-center gap-1">
         <Toggle on={evalAfterAnswer} onClick={onToggleEval} title="Show the eval bar briefly after each answer">
           eval
-        </Toggle>
-        <Toggle
-          on={fullReplay}
-          onClick={onToggleFullReplay}
-          title="Replay the whole line between positions (off: only the last move is animated)"
-        >
-          replay
         </Toggle>
         <Toggle on={sound} onClick={onToggleSound} title="Sound on answers">
           🔈

@@ -87,7 +87,6 @@ const EMPTY_STATS: RehearseStats = {
 
 /** How long the eval bar stays up after a correct answer when the toggle is on. */
 const EVAL_PEEK_MS = 1400;
-const FULL_REPLAY_KEY = 'rehearse.fullReplay';
 const SHOW_LINE_KEY = 'rehearse.showLine';
 
 export const lastChapterKey = (repertoireId: string) => `rehearse.last.${repertoireId}`;
@@ -107,10 +106,6 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
   const [items, setItems] = useState<RehearseItem[]>([]);
   const [stats, setStats] = useState<RehearseStats>(EMPTY_STATS);
   const [missed, setMissed] = useState<number[]>([]);
-  // Transition style: snap + animate the last ply (default) or replay lines in full.
-  const [fullReplay, setFullReplay] = useState(false);
-  const fullReplayRef = useRef(false);
-  fullReplayRef.current = fullReplay;
   // The SAN list under the board, off by default.
   const [showLine, setShowLine] = useState(false);
   // A "Replay line" is running: the board stays locked until it ends.
@@ -186,12 +181,7 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
     cardIndexRef.current = i;
     hintedRef.current = false;
     setPhase({ kind: 'transition', index: i });
-    await transition.animateTo(
-      it.pathSans,
-      it.parentFullFen,
-      signal,
-      fullReplayRef.current ? 'full' : 'last-ply',
-    );
+    await transition.animateTo(it.pathSans, it.parentFullFen, signal);
     setPhase({ kind: 'prompt', index: i, hint: false });
   }
 
@@ -505,7 +495,6 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
 
   useEffect(() => {
     void loadSoundPref().then(setSound);
-    void getMeta(FULL_REPLAY_KEY).then((v) => setFullReplay(v === '1')).catch(() => {});
     void getMeta(SHOW_LINE_KEY).then((v) => setShowLine(v === '1')).catch(() => {});
   }, []);
 
@@ -531,7 +520,6 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
     missed,
     shapes,
     replaying,
-    fullReplay,
     showLine,
     boardMovable,
     heroColor,
@@ -567,11 +555,6 @@ export function useRehearseSession({ repertoire, chapterTag, initialMode }: UseR
       },
       toggleSuggestions: () => setShowSuggestions((v) => !v),
       replayLine,
-      toggleFullReplay: () => {
-        const next = !fullReplay;
-        setFullReplay(next);
-        void setMeta(FULL_REPLAY_KEY, next ? '1' : '0').catch(() => {});
-      },
       toggleShowLine: () => {
         const next = !showLine;
         setShowLine(next);

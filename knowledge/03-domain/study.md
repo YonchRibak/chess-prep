@@ -157,12 +157,11 @@ cards return once at the end of the session.
 by default (`'last-ply'`) the board is set to the position *before* the next card's
 final ply with no animation and only that ply — the opponent's move the card asks
 about — glides in and stays as the last-move highlight, like stepping to a position
-on lichess; a one-ply continuation simply animates. The **replay** toggle in the strip
-(`meta` key `rehearse.fullReplay`) switches to `'full'`: take back to the common
-ancestor, play forward ply by ply, a line sharing nothing or a rewind over ten plies
-snapping instead. "▶ Replay line" under the board replays the current line on demand
-(board locked meanwhile), and "Show moves" toggles the SAN list, off by default
-(`rehearse.showLine`). `useBoard` gained `animationMs` for this; chessground reads `animation.duration` per
+on lichess; a one-ply continuation simply animates. "▶ Replay line" under the board
+replays the whole line from the start to the current position on demand (board locked
+meanwhile) — a button, deliberately not a mode. "Show moves" toggles the SAN list, off
+by default (`rehearse.showLine`). The hook's `'full'` mode (ply-by-ply between cards)
+exists but nothing selects it. `useBoard` gained `animationMs` for this; chessground reads `animation.duration` per
 `set`, so it must travel with the fen. Timings live in
 [rehearse/timings.ts](../../apps/web/src/lib/rehearse/timings.ts). Every sequence
 runs under one `AbortController`; an interrupted transition stops where it is and the

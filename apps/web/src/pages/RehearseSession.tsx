@@ -110,11 +110,9 @@ function Session({
         expanding={expanding}
         evalAfterAnswer={s.evalAfterAnswer}
         sound={s.sound}
-        fullReplay={s.fullReplay}
         onToggleExpand={expanding ? actions.leaveExpand : actions.enterExpand}
         onToggleEval={actions.toggleEvalAfterAnswer}
         onToggleSound={actions.toggleSound}
-        onToggleFullReplay={actions.toggleFullReplay}
         onExit={onExit}
       />
 
