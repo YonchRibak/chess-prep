@@ -55,7 +55,8 @@
       "PowerShell(git add apps/web/src/lib/engine/rashidArrows.ts apps/web/src/lib/engine/rashidArrows.test.ts apps/web/src/lib/chess/useBoard.ts apps/web/src/components/Board.tsx apps/web/src/components/RashidPanel.tsx apps/web/src/pages/RepertoireEditor.tsx knowledge/03-domain/rashid.md knowledge/05-web/components-and-hooks.md knowledge/06-workflows/testing.md knowledge/06-workflows/roadmap.md)",
       "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\ec5c186a-b8d1-495c-884d-d28f68d7569a\\\\scratchpad\\\\commit-msg7.txt\")",
       "PowerShell(git add apps/web/src/lib/engine/rashidLive.ts apps/web/src/lib/engine/rashidPrecompute.ts apps/web/src/lib/engine/rashidPrecompute.test.ts apps/web/src/components/RashidPanel.tsx apps/web/src/pages/RepertoireEditor.tsx rashid-dev-plan.md knowledge/03-domain/rashid.md knowledge/05-web/components-and-hooks.md knowledge/06-workflows/testing.md knowledge/06-workflows/roadmap.md)",
-      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\ec5c186a-b8d1-495c-884d-d28f68d7569a\\\\scratchpad\\\\commit-msg8.txt\")"
+      "PowerShell(git commit -F \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--code-chess-prep\\\\ec5c186a-b8d1-495c-884d-d28f68d7569a\\\\scratchpad\\\\commit-msg8.txt\")",
+      "PowerShell(Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 5173,5174,5175 } | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; \"$\\($_.LocalPort\\) -> PID $\\($_.OwningProcess\\) \\($\\($p.ProcessName\\)\\)\" } | Sort-Object -Unique)"
     ]
   }
 }
